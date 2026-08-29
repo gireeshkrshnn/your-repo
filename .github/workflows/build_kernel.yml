@@ -82,6 +82,8 @@ jobs:
         export LLVM=1
         export CROSS_COMPILE=aarch64-linux-gnu-
         
+        make O=out clean
+        make O=out mrproper
         make O=out vili_defconfig || make O=out vendor/vili_GKI_defconfig
         make -j$(nproc) O=out
 
