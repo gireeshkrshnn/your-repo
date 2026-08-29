@@ -1,4 +1,4 @@
-name: Build vili Kernel with WildKSU & SUSFS
+name: Build vili Kernel with WildKSU, SUSFS & KPM
 
 on:
   workflow_dispatch:
@@ -20,14 +20,11 @@ jobs:
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
           
-          # Setup WildKSU driver submodule
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
           
-          # Clone official SUSFS patches for Linux 5.4
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
-          # Safely apply SUSFS integration script if available
           if [ -f "susfs_patches/kernel_patches/setup_susfs.sh" ]; then
             bash susfs_patches/kernel_patches/setup_susfs.sh . drivers/kernelsu
           elif [ -f "susfs_patches/setup_susfs.sh" ]; then
@@ -38,7 +35,7 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Kernel & Disable Strict Warnings
+      - name: Configure Kernel & Purge Netfilter Collisions
         run: |
           cd kernel
           make O=out gki_defconfig
@@ -46,10 +43,16 @@ jobs:
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
             --enable CONFIG_KSU_SUSFS \
+            --enable CONFIG_KPM \
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
             --disable CONFIG_WERROR \
+            --disable CONFIG_NETFILTER_XT_MATCH_OWNER \
+            --disable CONFIG_NETFILTER_XT_MATCH_STATISTIC \
+            --disable CONFIG_NETFILTER_XT_TARGET_MARK \
+            --disable CONFIG_IP_NF_MATCH_AH \
+            --disable CONFIG_IP_NF_MATCH_TTL \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
             --disable CONFIG_PRINTK \
@@ -84,4 +87,4 @@ jobs:
           find out -name "dtb.img" -exec cp {} compiled_zip/ \; || true
           find out -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
           cd compiled_zip
-          zip -r ../../vili-kernel-fixed.zip *
+          zip -r ../../vili-wildksu-susfs-kpm.zip *
