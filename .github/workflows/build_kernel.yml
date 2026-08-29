@@ -11,6 +11,7 @@ jobs:
     - name: Maximize Disk Space
       uses: easimon/maximize-build-space@v10
       with:
+        root-replace: 'true'
         root-reserve-mb: 8192
         swap-size-mb: 1024
         remove-dotnet: 'true'
@@ -25,7 +26,7 @@ jobs:
 
     - name: Fetch Omar's vili Kernel Source
       run: |
-        git clone https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git kernel_vili --depth=1
+        git clone https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel_vili --depth=1
 
     - name: Setup Clang 17 Toolchain
       run: |
@@ -49,19 +50,18 @@ jobs:
         fi
         rm -rf susfs_src
 
-    - name: Configure vili defconfig
+    - name: Configure Kernel Flags via GKI Config
       run: |
         cd kernel_vili
-        DEFCONFIG="arch/arm64/configs/vili_defconfig"
+        DEFCONFIG="arch/arm64/configs/gki_defconfig"
         if [ ! -f "$DEFCONFIG" ]; then
-          DEFCONFIG="arch/arm64/configs/vendor/vili_GKI_defconfig"
+          DEFCONFIG="arch/arm64/configs/vendor/lahaina_defconfig"
         fi
 
         cat <<EOT >> $DEFCONFIG
         CONFIG_KPM=y
         CONFIG_KPM_HOOKS=y
         CONFIG_KSU=y
-        CONFIG_KSU_TAMPER_SYS_CALL=y
         CONFIG_SUSFS=y
         CONFIG_SUSFS_SUS_PATH=y
         CONFIG_SUSFS_SUS_MOUNT=y
@@ -89,7 +89,12 @@ jobs:
         export LLVM=1
         export CROSS_COMPILE=aarch64-linux-gnu-
         
-        make O=out vili_defconfig || make O=out vendor/vili_GKI_defconfig
+        if [ -f "arch/arm64/configs/vendor/lahaina_defconfig" ]; then
+          make O=out vendor/lahaina_defconfig
+        else
+          make O=out gki_defconfig
+        fi
+        
         make -j$(nproc) O=out KCFLAGS="-w"
 
     - name: Package AnyKernel3 Zip
