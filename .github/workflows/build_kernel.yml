@@ -1,4 +1,4 @@
-name: Build crDroid vili Stock Kernel (WildKSU + SuSFS 2.2.0 + KPM)
+name: Build Omar DerpFest vili Kernel (WildKSU + SuSFS 2.2.0 + KPM)
 
 on:
   workflow_dispatch:
@@ -23,9 +23,9 @@ jobs:
         sudo apt-get install -y build-essential bc libssl-dev libncurses5-dev libncursesw5-dev \
           bison flex libelf-dev zip unzip git wget python3 clang lld llvm
 
-    - name: Fetch crDroid SM8350 Kernel Source
+    - name: Fetch Omar's vili Kernel Source
       run: |
-        git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm8350.git -b 16.0 kernel_vili --depth=1
+        git clone https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git kernel_vili --depth=1
 
     - name: Setup Clang 17 Toolchain
       run: |
@@ -49,10 +49,13 @@ jobs:
         fi
         rm -rf susfs_src
 
-    - name: Configure GKI defconfig
+    - name: Configure vili defconfig
       run: |
         cd kernel_vili
-        DEFCONFIG="arch/arm64/configs/gki_defconfig"
+        DEFCONFIG="arch/arm64/configs/vili_defconfig"
+        if [ ! -f "$DEFCONFIG" ]; then
+          DEFCONFIG="arch/arm64/configs/vendor/vili_GKI_defconfig"
+        fi
 
         cat <<EOT >> $DEFCONFIG
         CONFIG_KPM=y
@@ -76,7 +79,7 @@ jobs:
           sed -i 's/^[ \t]*/\t/' drivers/input/touchscreen/focaltech_3680/Makefile || true
         fi
 
-    - name: Compile Stock Kernel Image
+    - name: Compile Kernel Image
       run: |
         cd kernel_vili
         export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
@@ -86,7 +89,7 @@ jobs:
         export LLVM=1
         export CROSS_COMPILE=aarch64-linux-gnu-
         
-        make O=out gki_defconfig
+        make O=out vili_defconfig || make O=out vendor/vili_GKI_defconfig
         make -j$(nproc) O=out KCFLAGS="-w"
 
     - name: Package AnyKernel3 Zip
@@ -102,10 +105,10 @@ jobs:
         sed -i 's/device.name1=.*/device.name1=vili/' AK3/anykernel.sh
         
         cd AK3
-        zip -r9 $GITHUB_WORKSPACE/crDroid_vili_Stock_WildKSU_SuSFS2.2_KPM.zip *
+        zip -r9 $GITHUB_WORKSPACE/DerpFest_vili_WildKSU_SuSFS2.2_KPM.zip *
 
     - name: Upload Kernel Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: crDroid-vili-Stock-WildKSU-SuSFS2.2-KPM
-        path: crDroid_vili_Stock_WildKSU_SuSFS2.2_KPM.zip
+        name: DerpFest-vili-WildKSU-SuSFS2.2-KPM
+        path: DerpFest_vili_WildKSU_SuSFS2.2_KPM.zip
