@@ -1,4 +1,40 @@
-- name: Inject WildKSU Driver
+name: Build crDroid vili Stock Kernel (WildKSU + SuSFS 2.2.0 + KPM)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Maximize Disk Space
+      uses: easimon/maximize-build-space@v10
+      with:
+        root-reserve-mb: 8192
+        swap-size-mb: 1024
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y build-essential bc libssl-dev libncurses5-dev libncursesw5-dev \
+          bison flex libelf-dev zip unzip git wget python3 clang lld llvm
+
+    - name: Fetch crDroid SM8350 Kernel Source
+      run: |
+        git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm8350.git -b 16.0 kernel_vili --depth=1
+        cd kernel_vili
+
+    - name: Setup Clang 17 Toolchain
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/clang
+        wget https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
+        tar -xf clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C $GITHUB_WORKSPACE/clang --strip-components=1
+
+    - name: Inject WildKSU Driver
       run: |
         cd $GITHUB_WORKSPACE/kernel_vili
         rm -rf kernel/ksu
@@ -12,3 +48,67 @@
         cp -r susfs_src/kernel_patches/fs/* fs/
         cp -r susfs_src/kernel_patches/include/linux/* include/linux/
         patch -p1 < susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch || true
+
+    - name: Configure Stock defconfig
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_vili
+        DEFCONFIG="arch/arm64/configs/vili_defconfig"
+        if [ ! -f "$DEFCONFIG" ]; then
+          DEFCONFIG="arch/arm64/configs/vendor/vili_GKI_defconfig"
+        fi
+
+        cat <<EOT >> $DEFCONFIG
+        # KPM Support
+        CONFIG_KPM=y
+        CONFIG_KPM_HOOKS=y
+
+        # WildKSU Options
+        CONFIG_KSU=y
+        CONFIG_KSU_TAMPER_SYS_CALL=y
+
+        # SuSFS 2.2.0 Options
+        CONFIG_SUSFS=y
+        CONFIG_SUSFS_SUS_PATH=y
+        CONFIG_SUSFS_SUS_MOUNT=y
+        CONFIG_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+        CONFIG_SUSFS_OPEN_REDIRECT=y
+        CONFIG_SUSFS_SUS_SU=y
+
+        CONFIG_TMPFS_XATTR=y
+        CONFIG_TMPFS_POSIX_ACL=y
+        EOT
+
+    - name: Compile Stock Kernel Image
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_vili
+        export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CC=clang
+        export LLVM=1
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        
+        make O=out vili_defconfig || make O=out vendor/vili_GKI_defconfig
+        make -j$(nproc) O=out
+
+    - name: Package AnyKernel3 Zip
+      run: |
+        cd $GITHUB_WORKSPACE
+        git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AK3
+        
+        if [ -f "kernel_vili/out/arch/arm64/boot/Image.gz-dtb" ]; then
+          cp kernel_vili/out/arch/arm64/boot/Image.gz-dtb AK3/
+        elif [ -f "kernel_vili/out/arch/arm64/boot/Image" ]; then
+          cp kernel_vili/out/arch/arm64/boot/Image AK3/
+        fi
+
+        sed -i 's/device.name1=.*/device.name1=vili/' AK3/anykernel.sh
+        
+        cd AK3
+        zip -r9 $GITHUB_WORKSPACE/crDroid_vili_Stock_WildKSU_SuSFS2.2_KPM.zip *
+
+    - name: Upload Kernel Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: crDroid-vili-Stock-WildKSU-SuSFS2.2-KPM
+        path: crDroid_vili_Stock_WildKSU_SuSFS2.2_KPM.zip
