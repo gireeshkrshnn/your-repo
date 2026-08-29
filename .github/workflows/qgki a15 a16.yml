@@ -1,4 +1,4 @@
-name: Build vili Pure Stock Kernel (WildKSU + SUSFS 2.2.0+, Quick Sleep, No Bug Reports)
+name: Build vili GKI Kernel (A13-A17, WildKSU + SUSFS 2.2.0+)
 
 on:
   workflow_dispatch:
@@ -21,16 +21,16 @@ jobs:
           cd kernel
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
 
-      - name: Enforce Pure Stock Base, Instant Sleep, & Disable Automatic Crash/Bug Dumps
+      - name: Configure GKI Target & Battery/Sleep Parameters
         run: |
           cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Fixed path to match the root configs directory of this source tree
-          make O=out vili_defconfig
+          # Initialize universal GKI configuration framework for multi-Android support (A13-A17)
+          make O=out gki_defconfig
 
-          # Configure instant sleep state parameters and completely disable automatic crash/bug report generation
+          # Apply battery optimizations, fast sleep, and remove debug/pstore logging overhead
           ./scripts/config --file out/.config \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
@@ -51,7 +51,7 @@ jobs:
             --disable CONFIG_FTRACE \
             --disable CONFIG_TRACING
 
-          # Enable KPROBES for WildKSU/SUSFS hooks
+          # Enable KPROBES for WildKSU and SUSFS integration hooks
           ./scripts/config --file out/.config \
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
@@ -80,4 +80,4 @@ jobs:
           fi
           
           cd compiled_zip
-          zip -r ../../vili-pure-stock-quick-sleep-nobugs.zip *
+          zip -r ../../vili-gki-a13-a17-wildksu.zip *
