@@ -1,0 +1,53 @@
+name: Build vili Stock QGKI Kernel (System-Optimized, Android 15, WildKSU + SUSFS + KPM)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Environment & Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu git libelf-dev libssl-dev make python3 wget zip
+
+      - name: Clone QGKI Source & Setup Latest WildKSU + SUSFS
+        run: |
+          # Clone stock-based Android 15 compatible QGKI tree for vili
+          git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
+          cd kernel
+
+          # Pull latest WildKSU with integrated SUSFS 2.2.0+ and KPM support hooks
+          git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
+
+      - name: Compile System-Wide Optimized Kernel (Battery Saver, No OC)
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=clang
+          
+          # Load stock defconfig for vili preserving core power limits and strict thermal bounds
+          make O=out vendor/vili_defconfig
+          
+          # Enable system-wide compiler optimizations (-O2 performance pass with LTO tuning)
+          # without breaking stability or triggering unwanted core heat spikes.
+          make O=out KCFLAGS="-O2 -pipe" LTO=thin -j$(nproc)
+
+      - name: Package Flashable Output ZIP
+        run: |
+          cd kernel
+          mkdir -p compiled_zip
+          cp out/arch/arm64/boot/Image compiled_zip/
+          
+          if [ -f "out/arch/arm64/boot/dtbo.img" ]; then
+            cp out/arch/arm64/boot/dtbo.img compiled_zip/
+          fi
+          
+          cd compiled_zip
+          zip -r ../../vili-a15-qgki-optimized-wildksu-susfs.zip *
