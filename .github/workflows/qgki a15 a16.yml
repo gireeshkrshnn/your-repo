@@ -20,20 +20,16 @@ jobs:
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
           
-          # Setup WildKSU submodule driver
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
           
-          # Clone matching SUSFS repository branch for Linux 5.4 kernels
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || true
 
-          # Automatically apply SUSFS integration patches using its built-in script if available
           if [ -f "susfs_patches/kernel_patches/setup_susfs.sh" ]; then
             bash susfs_patches/kernel_patches/setup_susfs.sh . drivers/kernelsu
           elif [ -f "susfs_patches/setup_susfs.sh" ]; then
             bash susfs_patches/setup_susfs.sh . drivers/kernelsu
           else
-            # Fallback manual patch copying
             cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
             cp -rf susfs_patches/kernel_patches/include/* include/ || true
             cp -rf susfs_patches/kernel_patches/net/* net/ || true
@@ -47,10 +43,8 @@ jobs:
         run: |
           cd kernel
           
-          # Use gki_defconfig as the baseline target for GKI kernels
           make O=out gki_defconfig
 
-          # Enable KSU, SUSFS, KPM, and performance flags while minimizing logging overhead
           ./scripts/config --file out/.config \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
@@ -63,6 +57,7 @@ jobs:
             --enable CONFIG_KPROBE_EVENTS \
             --enable CONFIG_KSU \
             --enable CONFIG_KSU_SUSFS \
+            --disable CONFIG_WERROR \
             --disable CONFIG_DEBUG_KMEMLEAK \
             --disable CONFIG_PSTORE \
             --disable CONFIG_PSTORE_CONSOLE \
