@@ -15,7 +15,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
-      - name: Clone Kernel Source & Setup WildKSU with SUSFS
+      - name: Clone Kernel Source & Setup WildKSU with KPM & SUSFS
         run: |
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
@@ -25,17 +25,16 @@ jobs:
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
-          if [ -f "susfs_patches/kernel_patches/setup_susfs.sh" ]; then
-            bash susfs_patches/kernel_patches/setup_susfs.sh . drivers/kernelsu
-          elif [ -f "susfs_patches/setup_susfs.sh" ]; then
-            bash susfs_patches/setup_susfs.sh . drivers/kernelsu
+          if [ -d "susfs_patches/kernel_patches" ]; then
+            cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
+            cp -rf susfs_patches/kernel_patches/include/* include/ || true
           fi
 
       - name: Clone Clang Toolchain
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Kernel & Purge Netfilter Collisions
+      - name: Configure Kernel with WildKSU, SUSFS & KPM
         run: |
           cd kernel
           make O=out gki_defconfig
@@ -48,11 +47,6 @@ jobs:
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
             --disable CONFIG_WERROR \
-            --disable CONFIG_NETFILTER_XT_MATCH_OWNER \
-            --disable CONFIG_NETFILTER_XT_MATCH_STATISTIC \
-            --disable CONFIG_NETFILTER_XT_TARGET_MARK \
-            --disable CONFIG_IP_NF_MATCH_AH \
-            --disable CONFIG_IP_NF_MATCH_TTL \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
             --disable CONFIG_PRINTK \
