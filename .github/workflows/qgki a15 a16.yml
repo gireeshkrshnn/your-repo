@@ -1,4 +1,4 @@
-name: Build vili GKI Kernel (A13-A17, WildKSU + SUSFS 2.2.0+)
+name: Build vili GKI Kernel (A13-A17, WildKSU + SUSFS + KPM)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
       - name: Set up Environment & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu git libelf-dev libssl-dev make python3 wget zip
+          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu git libelf-dev libssl-dev make python3 wget zip lld llvm
 
       - name: Clone Stock Source & Setup WildKSU with KPM & SUSFS
         run: |
@@ -21,22 +21,25 @@ jobs:
           cd kernel
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
 
-      - name: Configure GKI Target & Battery/Sleep Parameters
+      - name: Clone Official AOSP Clang Toolchain
+        run: |
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+/refs/heads/main/clang-r450784d clang-toolchain || true
+
+      - name: Configure GKI Target, KPM, Battery/Sleep Parameters
         run: |
           cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Initialize universal GKI configuration framework for multi-Android support (A13-A17)
           make O=out gki_defconfig
 
-          # Apply battery optimizations, fast sleep, and remove debug/pstore logging overhead
           ./scripts/config --file out/.config \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
             --enable CONFIG_PM_AUTOSLEEP \
             --enable CONFIG_SUSPEND \
             --enable CONFIG_SUSPEND_FREEZER \
+            --enable CONFIG_KPM \
             --disable CONFIG_DEBUG_KMEMLEAK \
             --disable CONFIG_PSTORE \
             --disable CONFIG_PSTORE_CONSOLE \
@@ -51,7 +54,6 @@ jobs:
             --disable CONFIG_FTRACE \
             --disable CONFIG_TRACING
 
-          # Enable KPROBES for WildKSU and SUSFS integration hooks
           ./scripts/config --file out/.config \
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
@@ -59,15 +61,18 @@ jobs:
 
           make O=out ARCH=arm64 olddefconfig
 
-      - name: Compile Core Kernel Image
+      - name: Compile Core Kernel Image with AOSP Clang
         run: |
           cd kernel
+          export PATH="${{ github.workspace }}/kernel/../clang-toolchain/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
+          export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CC=clang
+          export LD=ld.lld
           
-          make O=out -j$(nproc)
+          make O=out CC=clang LD=ld.lld -j$(nproc)
 
       - name: Package Flashable Output ZIP
         run: |
@@ -80,4 +85,4 @@ jobs:
           fi
           
           cd compiled_zip
-          zip -r ../../vili-gki-a13-a17-wildksu.zip *
+          zip -r ../../vili-gki-a13-a17-wildksu-kpm.zip *
