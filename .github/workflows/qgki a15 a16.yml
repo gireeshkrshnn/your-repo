@@ -25,16 +25,17 @@ jobs:
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
-          if [ -d "susfs_patches/kernel_patches" ]; then
-            cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
-            cp -rf susfs_patches/kernel_patches/include/* include/ || true
+          if [ -f "susfs_patches/kernel_patches/setup_susfs.sh" ]; then
+            bash susfs_patches/kernel_patches/setup_susfs.sh . drivers/kernelsu
+          elif [ -f "susfs_patches/setup_susfs.sh" ]; then
+            bash susfs_patches/setup_susfs.sh . drivers/kernelsu
           fi
 
       - name: Clone Clang Toolchain
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Kernel with WildKSU, SUSFS & KPM
+      - name: Configure Kernel & Exclude Netfilter Target Collisions
         run: |
           cd kernel
           make O=out gki_defconfig
@@ -47,6 +48,9 @@ jobs:
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
             --disable CONFIG_WERROR \
+            --disable CONFIG_NETFILTER_XT_TARGET_NOTRACK \
+            --disable CONFIG_NF_DEFRAG_IPV4 \
+            --disable CONFIG_NF_DEFRAG_IPV6 \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
             --disable CONFIG_PRINTK \
