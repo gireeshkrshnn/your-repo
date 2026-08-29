@@ -1,4 +1,4 @@
-name: Build vili GKI Kernel (A13-A17, WildKSU + SUSFS + KPM)
+name: Build vili Kernel with WildKSU & SUSFS
 
 on:
   workflow_dispatch:
@@ -15,69 +15,53 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
-      - name: Clone Stock Source & Setup WildKSU with KPM & SUSFS
+      - name: Clone Kernel Source & Setup WildKSU with SUSFS
         run: |
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
           
+          # Setup WildKSU driver submodule
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
           
-          git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || \
-          git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || true
+          # Clone official SUSFS patches for Linux 5.4
+          git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
+          git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
+          # Safely apply SUSFS integration script if available
           if [ -f "susfs_patches/kernel_patches/setup_susfs.sh" ]; then
             bash susfs_patches/kernel_patches/setup_susfs.sh . drivers/kernelsu
           elif [ -f "susfs_patches/setup_susfs.sh" ]; then
             bash susfs_patches/setup_susfs.sh . drivers/kernelsu
-          else
-            cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
-            cp -rf susfs_patches/kernel_patches/include/* include/ || true
-            cp -rf susfs_patches/kernel_patches/net/* net/ || true
           fi
 
-      - name: Clone Official AOSP Clang Toolchain
+      - name: Clone Clang Toolchain
         run: |
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+/refs/heads/main/clang-r450784d clang-toolchain || true
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Build Target and Apply Optimizations
+      - name: Configure Kernel & Disable Strict Warnings
         run: |
           cd kernel
-          
           make O=out gki_defconfig
 
           ./scripts/config --file out/.config \
-            --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
-            --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
-            --enable CONFIG_PM_AUTOSLEEP \
-            --enable CONFIG_SUSPEND \
-            --enable CONFIG_SUSPEND_FREEZER \
-            --enable CONFIG_KPM \
+            --enable CONFIG_KSU \
+            --enable CONFIG_KSU_SUSFS \
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
-            --enable CONFIG_KSU \
-            --enable CONFIG_KSU_SUSFS \
             --disable CONFIG_WERROR \
-            --disable CONFIG_DEBUG_KMEMLEAK \
-            --disable CONFIG_PSTORE \
-            --disable CONFIG_PSTORE_CONSOLE \
-            --disable CONFIG_PSTORE_PMSG \
-            --disable CONFIG_PSTORE_RAM \
-            --disable CONFIG_PRINTK \
-            --disable CONFIG_PRINTK_INDEX \
-            --disable CONFIG_DYNAMIC_DEBUG \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
-            --disable CONFIG_SLUB_DEBUG \
-            --disable CONFIG_FTRACE \
-            --disable CONFIG_TRACING
+            --disable CONFIG_PRINTK \
+            --disable CONFIG_PRINTK_INDEX \
+            --disable CONFIG_DYNAMIC_DEBUG
 
           make O=out ARCH=arm64 olddefconfig
 
-      - name: Compile Kernel via Direct LLVM/Clang Pipeline
+      - name: Compile Kernel
         run: |
           cd kernel
-          export PATH="${{ github.workspace }}/kernel/../clang-toolchain/bin:$PATH"
+          export PATH="${{ github.workspace }}/clang-toolchain/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
           
@@ -96,7 +80,8 @@ jobs:
         run: |
           cd kernel
           mkdir -p compiled_zip
-          find out -name "Image" -exec cp {} compiled_zip/ \; || find . -name "Image" -exec cp {} compiled_zip/ \;
+          find out -name "Image" -exec cp {} compiled_zip/ \;
+          find out -name "dtb.img" -exec cp {} compiled_zip/ \; || true
           find out -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
           cd compiled_zip
-          zip -r ../../vili-gki-a13-a17-wildksu-kpm.zip *
+          zip -r ../../vili-kernel-fixed.zip *
