@@ -49,13 +49,10 @@ jobs:
         fi
         rm -rf susfs_src
 
-    - name: Configure Stock defconfig
+    - name: Configure GKI defconfig
       run: |
         cd kernel_vili
-        DEFCONFIG="arch/arm64/configs/vili_defconfig"
-        if [ ! -f "$DEFCONFIG" ]; then
-          DEFCONFIG="arch/arm64/configs/vendor/vili_GKI_defconfig"
-        fi
+        DEFCONFIG="arch/arm64/configs/gki_defconfig"
 
         cat <<EOT >> $DEFCONFIG
         CONFIG_KPM=y
@@ -89,8 +86,8 @@ jobs:
         export LLVM=1
         export CROSS_COMPILE=aarch64-linux-gnu-
         
-        make O=out vili_defconfig || make O=out vendor/vili_GKI_defconfig
-        make -j$(nproc) O=out
+        make O=out gki_defconfig
+        make -j$(nproc) O=out KCFLAGS="-w"
 
     - name: Package AnyKernel3 Zip
       run: |
