@@ -26,7 +26,6 @@ jobs:
     - name: Fetch crDroid SM8350 Kernel Source
       run: |
         git clone https://github.com/crdroidandroid/android_kernel_xiaomi_sm8350.git -b 16.0 kernel_vili --depth=1
-        cd kernel_vili
 
     - name: Setup Clang 17 Toolchain
       run: |
@@ -36,51 +35,45 @@ jobs:
 
     - name: Inject WildKSU Driver
       run: |
-        cd $GITHUB_WORKSPACE/kernel_vili
-        rm -rf kernel/ksu
+        cd kernel_vili
         git clone https://github.com/WildKernels/Wild_KSU.git kernel/ksu --depth=1
 
     - name: Apply SuSFS 2.2.0 Patches
       run: |
-        cd $GITHUB_WORKSPACE/kernel_vili
-        rm -rf susfs_src
-        git clone https://github.com/simonpunk/susfs4ksu.git -b kernel-5.4 susfs_src --depth=1
+        cd kernel_vili
+        git clone https://github.com/simonpunk/susfs4ksu.git --branch kernel-5.4 susfs_src --depth=1
         cp -r susfs_src/kernel_patches/fs/* fs/
         cp -r susfs_src/kernel_patches/include/linux/* include/linux/
-        patch -p1 < susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch || true
+        if [ -f "susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch" ]; then
+          patch -p1 < susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch || true
+        fi
 
     - name: Configure Stock defconfig
       run: |
-        cd $GITHUB_WORKSPACE/kernel_vili
+        cd kernel_vili
         DEFCONFIG="arch/arm64/configs/vili_defconfig"
         if [ ! -f "$DEFCONFIG" ]; then
           DEFCONFIG="arch/arm64/configs/vendor/vili_GKI_defconfig"
-        fi
+        }
 
         cat <<EOT >> $DEFCONFIG
-        # KPM Support
         CONFIG_KPM=y
         CONFIG_KPM_HOOKS=y
-
-        # WildKSU Options
         CONFIG_KSU=y
         CONFIG_KSU_TAMPER_SYS_CALL=y
-
-        # SuSFS 2.2.0 Options
         CONFIG_SUSFS=y
         CONFIG_SUSFS_SUS_PATH=y
         CONFIG_SUSFS_SUS_MOUNT=y
         CONFIG_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
         CONFIG_SUSFS_OPEN_REDIRECT=y
         CONFIG_SUSFS_SUS_SU=y
-
         CONFIG_TMPFS_XATTR=y
         CONFIG_TMPFS_POSIX_ACL=y
         EOT
 
     - name: Compile Stock Kernel Image
       run: |
-        cd $GITHUB_WORKSPACE/kernel_vili
+        cd kernel_vili
         export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
         export ARCH=arm64
         export SUBARCH=arm64
@@ -93,7 +86,6 @@ jobs:
 
     - name: Package AnyKernel3 Zip
       run: |
-        cd $GITHUB_WORKSPACE
         git clone https://github.com/osm0sis/AnyKernel3 --depth=1 AK3
         
         if [ -f "kernel_vili/out/arch/arm64/boot/Image.gz-dtb" ]; then
