@@ -78,7 +78,7 @@ jobs:
           sed -i 's/^[ \t]*/\t/' drivers/input/touchscreen/focaltech_3680/Makefile || true
         fi
 
-    - name: Compile Kernel Image and Modules
+    - name: Compile Kernel Image Only
       run: |
         cd kernel_vili
         export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
@@ -95,7 +95,6 @@ jobs:
         fi
         
         make -j$(nproc) O=out KCFLAGS="-w"
-        make -j$(nproc) O=out modules KCFLAGS="-w"
 
     - name: Package AnyKernel3 Zip
       run: |
@@ -106,10 +105,6 @@ jobs:
         elif [ -f "kernel_vili/out/arch/arm64/boot/Image" ]; then
           cp kernel_vili/out/arch/arm64/boot/Image AK3/
         fi
-
-        # Find and bundle compiled kernel modules (.ko) if any exist
-        mkdir -p AK3/modules/system/lib/modules
-        find kernel_vili/out -name "*.ko" -exec cp {} AK3/modules/system/lib/modules/ \;
 
         sed -i 's/device.name1=.*/device.name1=vili/' AK3/anykernel.sh
         
