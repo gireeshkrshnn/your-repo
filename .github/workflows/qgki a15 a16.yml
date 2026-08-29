@@ -27,7 +27,8 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          make O=out vendor/vili_defconfig
+          # Fixed path to match the root configs directory of this source tree
+          make O=out vili_defconfig
 
           # Configure instant sleep state parameters and completely disable automatic crash/bug report generation
           ./scripts/config --file out/.config \
