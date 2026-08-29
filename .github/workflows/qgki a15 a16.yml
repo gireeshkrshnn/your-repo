@@ -1,4 +1,4 @@
-name: Build vili Pure Stock Kernel (WildKSU Next + KPM + SUSFS 2.2.0+, No OC)
+name: Build vili Pure Stock Kernel (WildKSU + SUSFS 2.2.0+, Quick Sleep, No Bug Reports)
 
 on:
   workflow_dispatch:
@@ -15,25 +15,42 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu git libelf-dev libssl-dev make python3 wget zip
 
-      - name: Clone Stock Source & Setup WildKSU Next with KPM & SUSFS
+      - name: Clone Stock Source & Setup WildKSU with KPM & SUSFS
         run: |
-          # Pulling exact stock-based QGKI tree for vili
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
-          
-          # Inject WildKSU Next featuring KPM hooks and SUSFS 2.2.0+ support
-          git submodule add -b next https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
+          git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
 
-      - name: Enforce Pure Stock Configuration (No OC, Stock Power Profiles)
+      - name: Enforce Pure Stock Base, Instant Sleep, & Disable Automatic Crash/Bug Dumps
         run: |
           cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Load clean, untouched vendor definition to guarantee zero overclocking or altered voltages
           make O=out vendor/vili_defconfig
 
-          # Enable standard KSU / KPM hooks without modifying core CPU frequencies or limits
+          # Configure instant sleep state parameters and completely disable automatic crash/bug report generation
+          ./scripts/config --file out/.config \
+            --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
+            --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
+            --enable CONFIG_PM_AUTOSLEEP \
+            --enable CONFIG_SUSPEND \
+            --enable CONFIG_SUSPEND_FREEZER \
+            --disable CONFIG_DEBUG_KMEMLEAK \
+            --disable CONFIG_PSTORE \
+            --disable CONFIG_PSTORE_CONSOLE \
+            --disable CONFIG_PSTORE_PMSG \
+            --disable CONFIG_PSTORE_RAM \
+            --disable CONFIG_PRINTK \
+            --disable CONFIG_PRINTK_INDEX \
+            --disable CONFIG_DYNAMIC_DEBUG \
+            --disable CONFIG_DEBUG_FS \
+            --disable CONFIG_DEBUG_KERNEL \
+            --disable CONFIG_SLUB_DEBUG \
+            --disable CONFIG_FTRACE \
+            --disable CONFIG_TRACING
+
+          # Enable KPROBES for WildKSU/SUSFS hooks
           ./scripts/config --file out/.config \
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
@@ -62,4 +79,4 @@ jobs:
           fi
           
           cd compiled_zip
-          zip -r ../../vili-pure-stock-wildksu-next-kpm.zip *
+          zip -r ../../vili-pure-stock-quick-sleep-nobugs.zip *
