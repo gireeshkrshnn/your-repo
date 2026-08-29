@@ -1,0 +1,65 @@
+name: Build vili Pure Stock Kernel (WildKSU Next + KPM + SUSFS 2.2.0+, No OC)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Environment & Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu git libelf-dev libssl-dev make python3 wget zip
+
+      - name: Clone Stock Source & Setup WildKSU Next with KPM & SUSFS
+        run: |
+          # Pulling exact stock-based QGKI tree for vili
+          git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
+          cd kernel
+          
+          # Inject WildKSU Next featuring KPM hooks and SUSFS 2.2.0+ support
+          git submodule add -b next https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
+
+      - name: Enforce Pure Stock Configuration (No OC, Stock Power Profiles)
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export SUBARCH=arm64
+          
+          # Load clean, untouched vendor definition to guarantee zero overclocking or altered voltages
+          make O=out vendor/vili_defconfig
+
+          # Enable standard KSU / KPM hooks without modifying core CPU frequencies or limits
+          ./scripts/config --file out/.config \
+            --enable CONFIG_KPROBES \
+            --enable CONFIG_HAVE_KPROBES \
+            --enable CONFIG_KPROBE_EVENTS
+
+          make O=out ARCH=arm64 olddefconfig
+
+      - name: Compile Core Kernel Image
+        run: |
+          cd kernel
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=clang
+          
+          make O=out -j$(nproc)
+
+      - name: Package Flashable Output ZIP
+        run: |
+          cd kernel
+          mkdir -p compiled_zip
+          cp out/arch/arm64/boot/Image compiled_zip/
+          
+          if [ -f "out/arch/arm64/boot/dtbo.img" ]; then
+            cp out/arch/arm64/boot/dtbo.img compiled_zip/
+          fi
+          
+          cd compiled_zip
+          zip -r ../../vili-pure-stock-wildksu-next-kpm.zip *
