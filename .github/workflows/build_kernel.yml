@@ -41,15 +41,13 @@ jobs:
     - name: Apply SuSFS 2.2.0 Patches
       run: |
         cd kernel_vili
-        wget https://github.com/simonpunk/susfs4ksu/archive/refs/heads/kernel-5.4.zip -O susfs.zip
-        unzip -q susfs.zip
-        mv susfs4ksu-kernel-5.4 susfs_src
+        git clone https://gitlab.com/simonpunk/susfs4ksu.git -b kernel-5.4 susfs_src --depth=1
         cp -r susfs_src/kernel_patches/fs/* fs/
         cp -r susfs_src/kernel_patches/include/linux/* include/linux/
         if [ -f "susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch" ]; then
           patch -p1 < susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch || true
         fi
-        rm -rf susfs.zip susfs_src
+        rm -rf susfs_src
 
     - name: Configure Stock defconfig
       run: |
