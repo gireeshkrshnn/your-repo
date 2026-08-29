@@ -72,6 +72,13 @@ jobs:
         CONFIG_TMPFS_POSIX_ACL=y
         EOT
 
+    - name: Fix Makefile Separator Error
+      run: |
+        cd kernel_vili
+        if [ -f "drivers/input/touchscreen/focaltech_3680/Makefile" ]; then
+          sed -i 's/^[ \t]*/\t/' drivers/input/touchscreen/focaltech_3680/Makefile || true
+        fi
+
     - name: Compile Stock Kernel Image
       run: |
         cd kernel_vili
@@ -82,8 +89,6 @@ jobs:
         export LLVM=1
         export CROSS_COMPILE=aarch64-linux-gnu-
         
-        make O=out clean
-        make O=out mrproper
         make O=out vili_defconfig || make O=out vendor/vili_GKI_defconfig
         make -j$(nproc) O=out
 
