@@ -1,47 +1,89 @@
-# 1. Install dependencies
-sudo apt-get update && sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
+name: Build vili Kernel with WildKSU, SUSFS & KPM
 
-# 2. Clone kernel source and SUSFS patches
-git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
-cd kernel
-git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
+on:
+  workflow_dispatch:
 
-# Apply SUSFS file-system patches safely (avoiding netfilter hook crashes)
-if [ -d "susfs_patches/kernel_patches" ]; then
-  cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
-  cp -rf susfs_patches/kernel_patches/include/* include/ || true
-fi
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-# 3. Clone Clang toolchain
-git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git ../clang-toolchain
+      - name: Set up Environment & Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
-# 4. Configure defconfig and enable KPM / KProbes / SUSFS flags
-make O=out gki_defconfig
-./scripts/config --file out/.config \
-  --enable CONFIG_KPROBES \
-  --enable CONFIG_HAVE_KPROBES \
-  --enable CONFIG_KPROBE_EVENTS \
-  --enable CONFIG_KALLSYMS \
-  --enable CONFIG_KALLSYMS_ALL \
-  --enable CONFIG_KPM \
-  --enable CONFIG_KSU_SUSFS \
-  --disable CONFIG_WERROR \
-  --disable CONFIG_DEBUG_FS \
-  --disable CONFIG_DEBUG_KERNEL \
-  --disable CONFIG_PRINTK \
-  --disable CONFIG_PRINTK_INDEX \
-  --disable CONFIG_DYNAMIC_DEBUG
-make O=out ARCH=arm64 olddefconfig
+      - name: Clone Kernel Source & Setup WildKSU with KPM & SUSFS
+        run: |
+          git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
+          cd kernel
+          
+          # Add WildKSU strictly as the root module
+          git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
+          
+          # Clone official SUSFS patches for Linux 5.4
+          git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
+          git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
-# 5. Compile the kernel
-export PATH="$(pwd)/../clang-toolchain/bin:$PATH"
-make O=out -j$(nproc) \
-  CC=clang \
-  LD=ld.lld \
-  AR=llvm-ar \
-  NM=llvm-nm \
-  OBJCOPY=llvm-objcopy \
-  OBJDUMP=llvm-objdump \
-  STRIP=llvm-strip \
-  CROSS_COMPILE=aarch64-linux-gnu- \
-  CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          # Safely copy FS and include files to prevent netfilter sub-make Error 2
+          if [ -d "susfs_patches/kernel_patches" ]; then
+            cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
+            cp -rf susfs_patches/kernel_patches/include/* include/ || true
+          fi
+
+      - name: Clone Clang Toolchain
+        run: |
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
+
+      - name: Configure Kernel with WildKSU, KPM, KProbes & SUSFS
+        run: |
+          cd kernel
+          make O=out gki_defconfig
+
+          ./scripts/config --file out/.config \
+            --enable CONFIG_KSU \
+            --enable CONFIG_KSU_SUSFS \
+            --enable CONFIG_KPM \
+            --enable CONFIG_KPROBES \
+            --enable CONFIG_HAVE_KPROBES \
+            --enable CONFIG_KPROBE_EVENTS \
+            --enable CONFIG_KALLSYMS \
+            --enable CONFIG_KALLSYMS_ALL \
+            --disable CONFIG_WERROR \
+            --disable CONFIG_DEBUG_FS \
+            --disable CONFIG_DEBUG_KERNEL \
+            --disable CONFIG_PRINTK \
+            --disable CONFIG_PRINTK_INDEX \
+            --disable CONFIG_DYNAMIC_DEBUG
+
+          make O=out ARCH=arm64 olddefconfig
+
+      - name: Compile Kernel
+        run: |
+          cd kernel
+          export PATH="${{ github.workspace }}/clang-toolchain/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          
+          make O=out -j$(nproc) \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
+      - name: Package Flashable Output ZIP
+        run: |
+          cd kernel
+          mkdir -p compiled_zip
+          find out -name "Image" -exec cp {} compiled_zip/ \;
+          find out -name "dtb.img" -exec cp {} compiled_zip/ \; || true
+          find out -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
+          cd compiled_zip
+          zip -r ../../vili-wildksu-susfs-kpm.zip *
