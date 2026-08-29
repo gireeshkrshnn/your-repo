@@ -35,7 +35,7 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Kernel & Exclude Netfilter Target Collisions
+      - name: Configure Kernel & Completely Bypass Netfilter Subsystem
         run: |
           cd kernel
           make O=out gki_defconfig
@@ -48,9 +48,8 @@ jobs:
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
             --disable CONFIG_WERROR \
-            --disable CONFIG_NETFILTER_XT_TARGET_NOTRACK \
-            --disable CONFIG_NF_DEFRAG_IPV4 \
-            --disable CONFIG_NF_DEFRAG_IPV6 \
+            --disable CONFIG_NETFILTER \
+            --disable CONFIG_INET_XFRM_MODE_TRANSPORT \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
             --disable CONFIG_PRINTK \
