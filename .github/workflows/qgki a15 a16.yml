@@ -29,15 +29,16 @@ jobs:
         run: |
           cd kernel
           
-          # Dynamically locate the correct defconfig for vili / sm8350
-          DEFCONFIG_FILE=$(find arch/arm64/configs -name "*vili*" -o -name "*lahaina*" | head -n 1)
-          if [ -z "$DEFCONFIG_FILE" ]; then
-            DEFCONFIG_FILE="arch/arm64/configs/gki_defconfig"
+          # Force explicit safe config target paths for vili/sm8350
+          if [ -f "arch/arm64/configs/vendor/vili_defconfig" ]; then
+            make O=out vendor/vili_defconfig
+          elif [ -f "arch/arm64/configs/vendor/msm-lahaina_defconfig" ]; then
+            make O=out vendor/msm-lahaina_defconfig
+          else
+            make O=out gki_defconfig
           fi
-          echo "Using defconfig: $DEFCONFIG_FILE"
 
-          make O=out $(basename $DEFCONFIG_FILE)
-
+          # Apply battery, sleep, and performance adjustments while stripping logging/pstore
           ./scripts/config --file out/.config \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
