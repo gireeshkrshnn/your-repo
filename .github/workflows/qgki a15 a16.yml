@@ -13,7 +13,7 @@ jobs:
       - name: Set up Environment & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu git libelf-dev libssl-dev make python3 wget zip lld llvm repo
+          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm
 
       - name: Clone Stock Source & Setup WildKSU with KPM & SUSFS
         run: |
@@ -29,15 +29,16 @@ jobs:
         run: |
           cd kernel
           
-          if [ -f "arch/arm64/configs/vendor/lahaina_defconfig" ]; then
-            DEFCONFIG_PATH="arch/arm64/configs/vendor/lahaina_defconfig"
-          elif [ -f "arch/arm64/configs/vendor/msm-lahaina_defconfig" ]; then
-            DEFCONFIG_PATH="arch/arm64/configs/vendor/msm-lahaina_defconfig"
-          else
-            DEFCONFIG_PATH="arch/arm64/configs/gki_defconfig"
+          # Dynamically locate the correct defconfig for vili / sm8350
+          DEFCONFIG_FILE=$(find arch/arm64/configs -name "*vili*" -o -name "*lahaina*" | head -n 1)
+          if [ -z "$DEFCONFIG_FILE" ]; then
+            DEFCONFIG_FILE="arch/arm64/configs/gki_defconfig"
           fi
+          echo "Using defconfig: $DEFCONFIG_FILE"
 
-          ./scripts/config --file $DEFCONFIG_PATH \
+          make O=out $(basename $DEFCONFIG_FILE)
+
+          ./scripts/config --file out/.config \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
             --enable CONFIG_PM_AUTOSLEEP \
@@ -61,24 +62,25 @@ jobs:
             --disable CONFIG_FTRACE \
             --disable CONFIG_TRACING
 
-      - name: Compile Kernel via Android Build Script with Clang Enforced
+          make O=out ARCH=arm64 olddefconfig
+
+      - name: Compile Kernel via Direct LLVM/Clang Pipeline
         run: |
           cd kernel
           export PATH="${{ github.workspace }}/kernel/../clang-toolchain/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=clang
-          export LD=ld.lld
-          export BUILD_CONFIG=build.config.msm.lahaina
           
-          if [ -f "build.sh" ]; then
-            ./build.sh
-          else
-            make ARCH=arm64 CC=clang LD=ld.lld gki_defconfig
-            make ARCH=arm64 CC=clang LD=ld.lld -j$(nproc)
-          fi
+          make O=out -j$(nproc) \
+            CC=clang \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
       - name: Package Flashable Output ZIP
         run: |
