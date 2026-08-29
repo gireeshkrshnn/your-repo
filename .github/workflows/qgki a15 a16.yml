@@ -37,7 +37,7 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Kernel with WildKSU, KPM, KProbes & SUSFS
+      - name: Configure Kernel & Disable Netfilter Cleanly
         run: |
           cd kernel
           make O=out gki_defconfig
@@ -52,6 +52,8 @@ jobs:
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
             --disable CONFIG_WERROR \
+            --disable CONFIG_NETFILTER \
+            --disable CONFIG_INET_XFRM_MODE_TRANSPORT \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
             --disable CONFIG_PRINTK \
@@ -59,12 +61,6 @@ jobs:
             --disable CONFIG_DYNAMIC_DEBUG
 
           make O=out ARCH=arm64 olddefconfig
-
-      - name: Neutralize Netfilter Subsystem to Bypass Collisions
-        run: |
-          cd kernel
-          rm -rf net/netfilter/*
-          echo "obj- := " > net/netfilter/Makefile
 
       - name: Compile Kernel
         run: |
