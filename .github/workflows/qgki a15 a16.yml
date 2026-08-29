@@ -15,7 +15,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
-      - name: Clone Kernel Source & Setup WildKSU without Netfilter Collisions
+      - name: Clone Kernel Source & Setup WildKSU & SUSFS
         run: |
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
@@ -23,14 +23,11 @@ jobs:
           # Add WildKSU
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
           
-          # Remove WildKSU's internal netfilter hook file to prevent netfilter/built-in.a Error 2
-          find drivers/kernelsu -name "*netfilter*" -exec rm -f {} \; || true
-          
           # Clone official SUSFS patches for Linux 5.4
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
-          # Safely apply SUSFS patches to fs and include only
+          # Safely apply SUSFS patches to fs and include
           if [ -d "susfs_patches/kernel_patches" ]; then
             cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
             cp -rf susfs_patches/kernel_patches/include/* include/ || true
@@ -62,6 +59,12 @@ jobs:
             --disable CONFIG_DYNAMIC_DEBUG
 
           make O=out ARCH=arm64 olddefconfig
+
+      - name: Neutralize Netfilter Subsystem to Bypass Collisions
+        run: |
+          cd kernel
+          rm -rf net/netfilter/*
+          echo "obj- := " > net/netfilter/Makefile
 
       - name: Compile Kernel
         run: |
