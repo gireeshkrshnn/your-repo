@@ -1,4 +1,4 @@
-name: Build crDroid vili Stock Kernel (WildKSU + SuSFS 2.2.0 + KPM)
+name: Build crDroid vili Stock Kernel (Latest WildKSU + SuSFS 2.2.0 + KPM)
 
 on:
   workflow_dispatch:
@@ -34,15 +34,15 @@ jobs:
         wget https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
         tar -xf clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C $GITHUB_WORKSPACE/clang --strip-components=1
 
-    - name: Inject KPM & WildKSU
+    - name: Inject Latest WildKSU Driver
       run: |
         cd $GITHUB_WORKSPACE/kernel_vili
-        curl -LSs "https://raw.githubusercontent.com/WildKernels/Wild_KSU/main/kernel/setup.sh" | bash -
+        git clone https://github.com/WildKernels/Wild_KSU.git -b main kernel/ksu --depth=1
 
-    - name: Apply SuSFS 2.2.0 Patches
+    - name: Apply Latest SuSFS 2.2.0 Patches
       run: |
         cd $GITHUB_WORKSPACE/kernel_vili
-        git clone https://github.com/simonpunk/susfs4ksu -b kernel-5.4 susfs_src
+        git clone https://github.com/simonpunk/susfs4ksu -b kernel-5.4 susfs_src --depth=1
         cp -r susfs_src/kernel_patches/fs/* fs/
         cp -r susfs_src/kernel_patches/include/linux/* include/linux/
         patch -p1 < susfs_src/kernel_patches/5.4/0001-susfs-v2.0.x-for-kernel-5.4.patch || true
@@ -103,10 +103,10 @@ jobs:
         sed -i 's/device.name1=.*/device.name1=vili/' AK3/anykernel.sh
         
         cd AK3
-        zip -r9 $GITHUB_WORKSPACE/crDroid_vili_Stock_WildKSU_SuSFS2.2_KPM.zip *
+        zip -r9 $GITHUB_WORKSPACE/crDroid_vili_Stock_LatestWildKSU_SuSFS2.2_KPM.zip *
 
     - name: Upload Kernel Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: crDroid-vili-Stock-WildKSU-SuSFS2.2-KPM
-        path: crDroid_vili_Stock_WildKSU_SuSFS2.2_KPM.zip
+        name: crDroid-vili-Stock-LatestWildKSU-SuSFS2.2-KPM
+        path: crDroid_vili_Stock_LatestWildKSU_SuSFS2.2_KPM.zip
