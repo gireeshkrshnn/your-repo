@@ -21,11 +21,14 @@ jobs:
           cd kernel
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
 
+      - name: Clone Official AOSP Clang Toolchain
+        run: |
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+/refs/heads/main/clang-r450784d clang-toolchain || true
+
       - name: Configure Build Target and Apply Optimizations
         run: |
           cd kernel
           
-          # Locate and update the target defconfig file managed by MSM build configs
           if [ -f "arch/arm64/configs/vendor/lahaina_defconfig" ]; then
             DEFCONFIG_PATH="arch/arm64/configs/vendor/lahaina_defconfig"
           elif [ -f "arch/arm64/configs/vendor/msm-lahaina_defconfig" ]; then
@@ -58,15 +61,23 @@ jobs:
             --disable CONFIG_FTRACE \
             --disable CONFIG_TRACING
 
-      - name: Compile Kernel via Android Build Script
+      - name: Compile Kernel via Android Build Script with Clang Enforced
         run: |
           cd kernel
+          export PATH="${{ github.workspace }}/kernel/../clang-toolchain/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CC=clang
+          export LD=ld.lld
           export BUILD_CONFIG=build.config.msm.lahaina
+          
           if [ -f "build.sh" ]; then
             ./build.sh
           else
-            make ARCH=arm64 gki_defconfig
-            make ARCH=arm64 -j$(nproc)
+            make ARCH=arm64 CC=clang LD=ld.lld gki_defconfig
+            make ARCH=arm64 CC=clang LD=ld.lld -j$(nproc)
           fi
 
       - name: Package Flashable Output ZIP
