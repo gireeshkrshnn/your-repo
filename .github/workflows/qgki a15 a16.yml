@@ -13,13 +13,31 @@ jobs:
       - name: Set up Environment & Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm
+          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
       - name: Clone Stock Source & Setup WildKSU with KPM & SUSFS
         run: |
           git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
           cd kernel
+          
+          # Setup WildKSU submodule
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
+          
+          # Clone SUSFS repository for source-level hook patches
+          git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || \
+          git clone --depth=1 https://github.com/simonpunk/susfs4oki.git susfs_patches || true
+
+          # Apply SUSFS kernel patches if available
+          if [ -d "susfs_patches/kernel_patches" ]; then
+            cp susfs_patches/kernel_patches/fs/* fs/ || true
+            cp susfs_patches/kernel_patches/include/* include/ || true
+            cp -r susfs_patches/kernel_patches/net/* net/ || true
+            
+            # Apply any patch files if present
+            for p in susfs_patches/kernel_patches/*.patch; do
+              [ -f "$p" ] && patch -p1 < "$p" || true
+            done
+          fi
 
       - name: Clone Official AOSP Clang Toolchain
         run: |
@@ -29,7 +47,6 @@ jobs:
         run: |
           cd kernel
           
-          # Force explicit safe config target paths for vili/sm8350
           if [ -f "arch/arm64/configs/vendor/vili_defconfig" ]; then
             make O=out vendor/vili_defconfig
           elif [ -f "arch/arm64/configs/vendor/msm-lahaina_defconfig" ]; then
@@ -38,7 +55,6 @@ jobs:
             make O=out gki_defconfig
           fi
 
-          # Apply battery, sleep, and performance adjustments while stripping logging/pstore
           ./scripts/config --file out/.config \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
@@ -49,6 +65,8 @@ jobs:
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
+            --enable CONFIG_KSU \
+            --enable CONFIG_KSU_SUSFS \
             --disable CONFIG_DEBUG_KMEMLEAK \
             --disable CONFIG_PSTORE \
             --disable CONFIG_PSTORE_CONSOLE \
