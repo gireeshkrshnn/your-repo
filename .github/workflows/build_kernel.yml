@@ -94,7 +94,7 @@ jobs:
           make O=out gki_defconfig
         fi
         
-        make -j$(nproc) O=out KCFLAGS="-w"
+        make -j$(nproc) O=out Image.gz-dtb KCFLAGS="-w" || make -j$(nproc) O=out Image KCFLAGS="-w"
 
     - name: Package AnyKernel3 Zip
       run: |
