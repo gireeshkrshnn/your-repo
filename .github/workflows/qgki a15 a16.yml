@@ -104,19 +104,11 @@ jobs:
           export SUBARCH=arm64
           mkdir -p out
 
-          DEFCONFIG=""
-          if [ -f arch/arm64/configs/vili_defconfig ]; then
-            DEFCONFIG="vili_defconfig"
-          elif [ -f arch/arm64/configs/vendor/vili_defconfig ]; then
-            DEFCONFIG="vendor/vili_defconfig"
-          elif [ -f arch/arm64/configs/vendor/vili-perf_defconfig ]; then
-            DEFCONFIG="vendor/vili-perf_defconfig"
-          fi
-
+          DEFCONFIG=$(find arch/arm64/configs -name "*gki*" -o -name "*lahaina*" -o -name "*sm8350*" | head -1 | xargs basename)
           if [ -z "$DEFCONFIG" ]; then
-            echo "ERROR: Vili defconfig not found."
-            exit 1
+            DEFCONFIG="gki_defconfig"
           fi
+          echo "Using defconfig: $DEFCONFIG"
 
           make O=out ARCH=arm64 "$DEFCONFIG"
 
