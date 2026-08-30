@@ -1,4 +1,4 @@
-name: Build Lineage 23.2 Vili Kernel with WildKSU, SUSFS & KPM
+name: Build Lineage 21 Vili Kernel with WildKSU, SUSFS & KPM
 
 on:
   workflow_dispatch:
@@ -26,15 +26,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
-      - name: Clone Lineage 23.2 Kernel Tree & Inject Modules
+      - name: Clone Lineage 21 Kernel Tree & Inject Modules
         run: |
-          git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
+          git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-21 kernel
           cd kernel
           
           # Inject WildKSU
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu || true
           
-          # Inject SUSFS patches
+          # Inject SUSFS patches for Linux 5.4
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
@@ -53,8 +53,7 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Find and use the correct defconfig for vili on sm8350
-          make O=out gki_defconfig || make O=out vendor/vili_defconfig || make O=out msm_defconfig
+          make O=out vendor/vili_defconfig || make O=out gki_defconfig
 
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
@@ -104,10 +103,10 @@ jobs:
           find out -name "dtb.img" -exec cp {} compiled_zip/ \; || true
           find out -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
           cd compiled_zip
-          zip -r ../../lineage-23.2-vili-wildksu-susfs-kpm.zip *
+          zip -r ../../lineage-21-vili-wildksu-susfs-kpm.zip *
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Lineage-23.2-vili-WildKSU-SuFS-KPM
-          path: kernel/lineage-23.2-vili-wildksu-susfs-kpm.zip
+          name: Lineage-21-vili-WildKSU-SuFS-KPM
+          path: kernel/lineage-21-vili-wildksu-susfs-kpm.zip
