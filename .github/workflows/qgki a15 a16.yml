@@ -53,7 +53,6 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Use GKI defconfig for sm8350 common tree
           make O=out gki_defconfig
 
           ./scripts/config --file out/.config \
@@ -65,11 +64,7 @@ jobs:
             --enable CONFIG_KPROBE_EVENTS \
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
-            --enable CONFIG_QCOM_QMI_HELPERS \
-            --enable CONFIG_QMI_ENCDEC \
-            --enable CONFIG_QRTR \
-            --enable CONFIG_QRTR_SMD \
-            --enable CONFIG_RMNET \
+            --disable CONFIG_BOARD_QCOM_TECHPACK \
             --disable CONFIG_WERROR \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL
