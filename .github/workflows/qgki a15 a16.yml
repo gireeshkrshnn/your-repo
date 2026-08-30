@@ -43,12 +43,12 @@ jobs:
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
 
-      - name: Clone Latest Vili Kernel Tree
+      - name: Clone Vili Kernel Tree
         run: |
           set -euo pipefail
           git clone \
             --depth=1 \
-            --branch lineage-23.2 \
+            --branch lineage-21 \
             https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git \
             kernel
 
@@ -177,10 +177,10 @@ jobs:
           find out -type f -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
 
           cd compiled_zip
-          zip -r ../../vili-latest-wildksu-susfs-kpm.zip .
+          zip -r ../../vili-wildksu-susfs-kpm.zip .
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vili-Latest-WildKSU-SUSFS-KPM
-          path: kernel/vili-latest-wildksu-susfs-kpm.zip
+          name: Vili-WildKSU-SUSFS-KPM
+          path: kernel/vili-wildksu-susfs-kpm.zip
