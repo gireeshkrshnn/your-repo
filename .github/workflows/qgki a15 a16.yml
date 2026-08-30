@@ -1,4 +1,4 @@
-name: Build vili Kernel with WildKSU, SUSFS & KPM
+name: Build Lineage Vili Kernel with WildKSU, SUSFS & KPM
 
 on:
   workflow_dispatch:
@@ -10,24 +10,34 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Maximize Build Disk Space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 100
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
       - name: Set up Environment & Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
 
-      - name: Clone Kernel Source & Setup WildKSU & SUSFS
+      - name: Clone Lineage Stock Kernel Tree & Inject Modules
         run: |
-          git clone --depth=1 https://github.com/AOSP-for-vili/android_kernel_xiaomi_sm8350.git -b lineage-23.2 kernel
+          git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-21 kernel
           cd kernel
           
-          # Add WildKSU
+          # Inject WildKSU
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu
           
-          # Clone official SUSFS patches for Linux 5.4
+          # Inject SUSFS patches for Linux 5.4
           git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
           git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
 
-          # Safely apply SUSFS patches to fs and include
           if [ -d "susfs_patches/kernel_patches" ]; then
             cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
             cp -rf susfs_patches/kernel_patches/include/* include/ || true
@@ -37,10 +47,10 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
 
-      - name: Configure Kernel & Disable Netfilter Cleanly
+      - name: Configure Kernel with Optimizations & Security
         run: |
           cd kernel
-          make O=out gki_defconfig
+          make O=out vili_defconfig
 
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
@@ -51,14 +61,16 @@ jobs:
             --enable CONFIG_KPROBE_EVENTS \
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
+            --enable CONFIG_CPU_IDLE \
+            --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
+            --enable CONFIG_ENERGY_MODEL \
             --disable CONFIG_WERROR \
-            --disable CONFIG_NETFILTER \
-            --disable CONFIG_INET_XFRM_MODE_TRANSPORT \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL \
             --disable CONFIG_PRINTK \
             --disable CONFIG_PRINTK_INDEX \
-            --disable CONFIG_DYNAMIC_DEBUG
+            --disable CONFIG_DYNAMIC_DEBUG \
+            --disable CONFIG_DEBUG_INFO
 
           make O=out ARCH=arm64 olddefconfig
 
@@ -88,4 +100,10 @@ jobs:
           find out -name "dtb.img" -exec cp {} compiled_zip/ \; || true
           find out -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
           cd compiled_zip
-          zip -r ../../vili-wildksu-susfs-kpm.zip *
+          zip -r ../../lineage-vili-wildksu-susfs-kpm.zip *
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lineage-vili-WildKSU-SuFS-KPM
+          path: kernel/lineage-vili-wildksu-susfs-kpm.zip
