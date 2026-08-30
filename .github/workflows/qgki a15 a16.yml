@@ -140,6 +140,9 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
+          # Fix type mismatch errors with newer Clang versions on older Kernel 5.4 sources
+          export KCFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=strict-prototypes"
+
           make O=out \
             ARCH=arm64 \
             -j"$(nproc)" \
