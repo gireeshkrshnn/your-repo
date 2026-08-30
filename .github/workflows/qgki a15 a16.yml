@@ -129,7 +129,7 @@ jobs:
           export GIT_TERMINAL_PROMPT=0
           git clone \
             --depth=1 \
-            https://github.com/kdrag0n/proton-clang.git \
+            https://gitlab.com/ThankYouMario/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
             clang-toolchain
 
       - name: Compile Kernel
@@ -151,8 +151,7 @@ jobs:
             OBJDUMP=llvm-objdump \
             STRIP=llvm-strip \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            V=1
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
       - name: Verify and Package Kernel
         run: |
