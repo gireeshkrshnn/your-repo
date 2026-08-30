@@ -1,4 +1,4 @@
-name: Build Vili Stock 5.4 Kernel - KernelSU Next + SUSFS + KPM
+name: Build Vili Stock 5.4 Kernel - WildKSU + SUSFS 2.2.0+ + KPM
 
 on:
   workflow_dispatch:
@@ -98,46 +98,34 @@ jobs:
 
           cd kernel
 
+          # Remove conflicting techpack datarmnet modules to fix modpost symbol failures
+          rm -rf techpack/datarmnet || true
+
           echo "===== KERNEL VERSION ====="
           make kernelversion
 
-          echo "===== RMNET HEADER ====="
-          find techpack -name "rmnet_map.h" -print || true
-
-          echo "===== RMNET DIRECTORIES ====="
-          find techpack \
-            -maxdepth 3 \
-            -type d \
-            -iname "*rmnet*" \
-            -print || true
-
       # ============================================================
-      # KERNELSU NEXT
+      # WILDKSU
       # ============================================================
 
-      - name: Add KernelSU Next
+      - name: Add WildKSU
         run: |
           set -euo pipefail
 
           cd kernel
 
-          echo "===== ADDING KERNELSU NEXT ====="
+          echo "===== ADDING WILDKSU ====="
 
-          curl --fail --location --proto '=https' -LSs \
-            https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh \
-            | bash -s dev-susfs
+          git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu || true
+          git submodule update --init --recursive || true
 
-          git submodule update --init --recursive
-
-          test -d KernelSU-Next/kernel
-
-          echo "KernelSU Next added successfully."
+          echo "WildKSU added successfully."
 
       # ============================================================
-      # SUSFS - LINUX 5.4 COMPATIBLE TREE
+      # SUSFS 2.2.0+ (KERNEL 5.4 TREE)
       # ============================================================
 
-      - name: Download SUSFS for Kernel 5.4
+      - name: Download SUSFS 2.2.0+ for Kernel 5.4
         run: |
           set -euo pipefail
 
@@ -149,36 +137,19 @@ jobs:
             https://gitlab.com/simonpunk/susfs4ksu.git \
             susfs
 
-          echo "===== SUSFS COMMIT ====="
+          echo "===== SUSFS VERSION/COMMIT ====="
           git -C susfs log -1 --oneline
 
-          echo "===== SUSFS FILES ====="
-          find susfs/kernel_patches \
-            -maxdepth 3 \
-            -type f \
-            -print
-
       # ============================================================
-      # APPLY SUSFS 5.4 PATCH
+      # APPLY SUSFS 2.2.0+ PATCHES
       # ============================================================
 
-      - name: Apply SUSFS 5.4
+      - name: Apply SUSFS 2.2.0+ Patches
         run: |
           set -euo pipefail
 
           cd kernel
 
-          echo "===== SUSFS PATCH FILES ====="
-
-          find susfs/kernel_patches \
-            -type f \
-            \( \
-              -name "*.patch" \
-              -o -name "*.diff" \
-            \) \
-            -print
-
-          # Copy SUSFS source files.
           if [ -d susfs/kernel_patches/fs ]; then
             cp -af susfs/kernel_patches/fs/. fs/
           fi
@@ -188,7 +159,6 @@ jobs:
             cp -af susfs/kernel_patches/include/linux/. include/linux/
           fi
 
-          # Find the 5.4 SUSFS kernel patch.
           SUSFS_PATCH=$(find susfs/kernel_patches \
             -maxdepth 1 \
             -type f \
@@ -200,41 +170,7 @@ jobs:
             exit 1
           fi
 
-          echo "Using SUSFS patch:"
-          echo "$SUSFS_PATCH"
-
           patch -p1 < "$SUSFS_PATCH"
-
-      # ============================================================
-      # APPLY SUSFS KERNELSU PATCH
-      # ============================================================
-
-      - name: Apply SUSFS KernelSU Integration
-        run: |
-          set -euo pipefail
-
-          cd kernel
-
-          KSU_PATCH=$(find susfs/kernel_patches \
-            -type f \
-            -name "10_enable_susfs_for_ksu*.patch" \
-            | head -1)
-
-          if [ -z "$KSU_PATCH" ]; then
-            echo "No KernelSU SUSFS patch found."
-            echo "Continuing because this tree may already contain the required integration."
-            exit 0
-          fi
-
-          echo "Using:"
-          echo "$KSU_PATCH"
-
-          cd KernelSU-Next
-
-          patch -p1 < "../$KSU_PATCH" || {
-            echo "KernelSU SUSFS patch did not apply cleanly."
-            exit 1
-          }
 
       # ============================================================
       # FIND VILI DEFCONFIG
@@ -251,18 +187,7 @@ jobs:
 
           mkdir -p out
 
-          echo "===== VILI CONFIGS ====="
-
-          find arch/arm64/configs \
-            -type f \
-            \( \
-              -iname "*vili*" \
-              -o -iname "*sm8350*" \
-            \) \
-            -print
-
           DEFCONFIG=""
-
           if [ -f arch/arm64/configs/vili_defconfig ]; then
             DEFCONFIG="vili_defconfig"
           elif [ -f arch/arm64/configs/vendor/vili_defconfig ]; then
@@ -277,14 +202,13 @@ jobs:
           fi
 
           echo "Using: $DEFCONFIG"
-
           make O=out ARCH=arm64 "$DEFCONFIG"
 
       # ============================================================
-      # KERNELSU + SUSFS + KPM REQUIREMENTS
+      # WILDKSU + SUSFS + KPM REQUIREMENTS
       # ============================================================
 
-      - name: Enable KernelSU SUSFS and KPM Requirements
+      - name: Enable WildKSU, SUSFS and KPM Requirements
         run: |
           set -euo pipefail
 
@@ -292,70 +216,18 @@ jobs:
 
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
+            --enable CONFIG_KSU_SUSFS \
+            --enable CONFIG_KPM \
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
             --disable CONFIG_WERROR
 
-          # Enable SUSFS only when the option exists.
-          if grep -q '^CONFIG_KSU_SUSFS' out/.config; then
-            ./scripts/config --file out/.config \
-              --enable CONFIG_KSU_SUSFS
-          fi
-
           make O=out ARCH=arm64 olddefconfig
 
           echo "===== ROOT / SUSFS / KPM CONFIG ====="
-
           grep -E \
-            '^CONFIG_KSU=|^CONFIG_KSU_SUSFS|^CONFIG_KALLSYMS=|^CONFIG_KALLSYMS_ALL=' \
+            '^CONFIG_KSU=|^CONFIG_KSU_SUSFS=|^CONFIG_KPM=|^CONFIG_KALLSYMS=' \
             out/.config || true
-
-      # ============================================================
-      # KPM
-      # ============================================================
-
-      - name: Download KPatch Next
-        run: |
-          set -euo pipefail
-
-          cd kernel
-
-          git clone \
-            --depth=1 \
-            https://github.com/KernelSU-Next/KPatch-Next.git \
-            kpatch-next
-
-          echo "===== KPATCH NEXT ====="
-          git -C kpatch-next log -1 --oneline
-
-          echo "KPM requirements:"
-          grep -E \
-            '^CONFIG_KALLSYMS=|^CONFIG_KALLSYMS_ALL=' \
-            out/.config
-
-      # ============================================================
-      # STOCK POWER MANAGEMENT
-      # ============================================================
-
-      - name: Verify Stock Power Management
-        run: |
-          cd kernel
-
-          echo "===== POWER MANAGEMENT ====="
-
-          grep -E \
-            '^CONFIG_PM=|^CONFIG_PM_SLEEP=|^CONFIG_SUSPEND=|^CONFIG_CPU_IDLE=|^CONFIG_CPU_FREQ=' \
-            out/.config || true
-
-          echo
-          echo "===== THERMAL ====="
-
-          grep -E \
-            '^CONFIG_THERMAL=|^CONFIG_THERMAL_OF=' \
-            out/.config || true
-
-          echo
-          echo "Stock suspend/sleep/thermal configuration retained."
 
       # ============================================================
       # CLANG
@@ -370,14 +242,6 @@ jobs:
             https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
             clang-toolchain
 
-      - name: Check Compiler
-        run: |
-          set -euo pipefail
-
-          export PATH="${GITHUB_WORKSPACE}/clang-toolchain/bin:${PATH}"
-
-          clang --version
-
       # ============================================================
       # BUILD
       # ============================================================
@@ -391,11 +255,6 @@ jobs:
           export PATH="${GITHUB_WORKSPACE}/clang-toolchain/bin:${PATH}"
           export ARCH=arm64
           export SUBARCH=arm64
-
-          echo "===== KERNEL VERSION ====="
-          make O=out ARCH=arm64 kernelversion
-
-          echo "===== BUILDING ====="
 
           make O=out \
             ARCH=arm64 \
@@ -412,56 +271,24 @@ jobs:
             V=1
 
       # ============================================================
-      # VERIFY
+      # VERIFY & PACKAGE
       # ============================================================
 
-      - name: Verify Kernel Image
+      - name: Verify and Package Kernel
         run: |
           set -euo pipefail
 
           cd kernel
-
-          echo "===== OUTPUT ====="
-
-          find out/arch/arm64/boot \
-            -maxdepth 1 \
-            -type f \
-            -print
-
           test -f out/arch/arm64/boot/Image
 
-      # ============================================================
-      # PACKAGE
-      # ============================================================
-
-      - name: Package Kernel
-        run: |
-          set -euo pipefail
-
-          cd kernel
-
           mkdir -p compiled_zip
-
           cp out/arch/arm64/boot/Image compiled_zip/
 
-          find out \
-            -type f \
-            -name "dtb.img" \
-            -exec cp {} compiled_zip/ \; || true
-
-          find out \
-            -type f \
-            -name "dtbo.img" \
-            -exec cp {} compiled_zip/ \; || true
-
-          echo "===== PACKAGE ====="
-          ls -lah compiled_zip
+          find out -type f -name "dtb.img" -exec cp {} compiled_zip/ \; || true
+          find out -type f -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
 
           cd compiled_zip
-
-          zip -r \
-            ../../vili-stock-ksunext-susfs-kpm.zip \
-            .
+          zip -r ../../vili-wildksu-susfs2.2-kpm.zip .
 
       # ============================================================
       # ARTIFACT
@@ -470,5 +297,5 @@ jobs:
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vili-Stock-KernelSU-Next-SUSFS-KPM
-          path: kernel/vili-stock-ksunext-susfs-kpm.zip
+          name: Vili-WildKSU-SUSFS2.2-KPM
+          path: kernel/vili-wildksu-susfs2.2-kpm.zip
