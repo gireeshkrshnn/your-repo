@@ -129,7 +129,7 @@ jobs:
           export GIT_TERMINAL_PROMPT=0
           git clone \
             --depth=1 \
-            https://gitlab.com/ThankYouMario/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
+            https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
             clang-toolchain
 
       - name: Compile Kernel
