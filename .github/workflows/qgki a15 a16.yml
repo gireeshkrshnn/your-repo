@@ -94,7 +94,7 @@ jobs:
             exit 1
           fi
 
-          patch -p1 < "$SUSFS_PATCH"
+          patch -p1 --fuzz=3 < "$SUSFS_PATCH"
 
       - name: Configure Vili Stock Kernel
         run: |
