@@ -11,17 +11,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Maximize Build Disk Space
-        uses: easimon/maximize-build-space@v10
-        with:
-          root-reserve-mb: 16384
-          temp-reserve-mb: 100
-          swap-size-mb: 1024
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/lib/node_modules
 
       - name: Install Build Dependencies
         run: |
@@ -62,7 +59,7 @@ jobs:
             echo 'obj-y += kernelsu/' >> drivers/Makefile
           fi
           
-          # Bypass the strict inline hook grep check which crashes the build
+          # Bypass strict inline hook grep check
           if [ -f KernelSU/kernel/tools/inline_hook_check.mk ]; then
             echo "" > KernelSU/kernel/tools/inline_hook_check.mk
           fi
@@ -104,7 +101,6 @@ jobs:
           set -euo pipefail
           cd kernel
           
-          # Explicitly disable Inline/Manual hooks and rely on robust Kprobes for ReSukiSU root
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
             --enable CONFIG_KSU_SUSFS \
