@@ -31,6 +31,9 @@ jobs:
           git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-21 kernel
           cd kernel
           
+          # Remove conflicting techpack folders that cause external module modpost errors
+          rm -rf techpack/datarmnet || true
+          
           # Inject WildKSU
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu || true
           
@@ -64,7 +67,6 @@ jobs:
             --enable CONFIG_KPROBE_EVENTS \
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
-            --disable CONFIG_BOARD_QCOM_TECHPACK \
             --disable CONFIG_WERROR \
             --disable CONFIG_DEBUG_FS \
             --disable CONFIG_DEBUG_KERNEL
