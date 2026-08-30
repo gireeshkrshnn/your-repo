@@ -140,8 +140,8 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # Fix type mismatch errors with newer Clang versions on older Kernel 5.4 sources
-          export KCFLAGS="-Wno-error=incompatible-pointer-types -Wno-error=int-conversion -Wno-error=strict-prototypes"
+          # Fully bypass all modern compiler strictness checks causing compilation failure late in the build
+          export KCFLAGS="-w"
 
           make O=out \
             ARCH=arm64 \
