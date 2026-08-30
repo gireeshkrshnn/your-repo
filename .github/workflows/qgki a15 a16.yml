@@ -104,7 +104,6 @@ jobs:
           export SUBARCH=arm64
           mkdir -p out
 
-          # Use standard GKI configuration baseline for SM8350 platform tree
           make O=out ARCH=arm64 gki_defconfig
 
       - name: Enable WildKSU, SUSFS and Battery Optimization Requirements
@@ -127,9 +126,10 @@ jobs:
       - name: Clone Clang Toolchain
         run: |
           set -euo pipefail
+          export GIT_TERMINAL_PROMPT=0
           git clone \
             --depth=1 \
-            https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
+            https://github.com/kdrag0n/proton-clang.git \
             clang-toolchain
 
       - name: Compile Kernel
