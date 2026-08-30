@@ -96,7 +96,7 @@ jobs:
 
           patch -p1 --forward --reject-file=- < "$SUSFS_PATCH" || true
 
-      - name: Configure Vili Stock Kernel
+      - name: Configure Vili GKI Kernel
         run: |
           set -euo pipefail
           cd kernel
@@ -104,16 +104,10 @@ jobs:
           export SUBARCH=arm64
           mkdir -p out
 
-          # Find available defconfig automatically
-          DEFCONFIG=$(find arch/arm64/configs -name "*vili*" -o -name "*lahaina*" -o -name "*gki*" | head -1 | xargs basename)
-          if [ -z "$DEFCONFIG" ]; then
-            DEFCONFIG="gki_defconfig"
-          fi
-          echo "Using defconfig: $DEFCONFIG"
+          # Use standard GKI configuration baseline for SM8350 platform tree
+          make O=out ARCH=arm64 gki_defconfig
 
-          make O=out ARCH=arm64 "$DEFCONFIG"
-
-      - name: Enable WildKSU, SUSFS and KPM Requirements
+      - name: Enable WildKSU, SUSFS and Battery Optimization Requirements
         run: |
           set -euo pipefail
           cd kernel
@@ -125,7 +119,8 @@ jobs:
             --enable CONFIG_KALLSYMS_ALL \
             --disable CONFIG_WERROR \
             --disable CONFIG_PM_AUTOSLEEP \
-            --disable CONFIG_ENERGY_MODEL
+            --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
+            --enable CONFIG_ENERGY_MODEL
 
           make O=out ARCH=arm64 olddefconfig
 
