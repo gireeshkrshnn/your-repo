@@ -53,7 +53,7 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          make O=out vendor/vili_defconfig || make O=out gki_defconfig
+          make O=out vendor/vili_defconfig || make O=out vendor/sm8350-perf_defconfig
 
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
@@ -64,18 +64,14 @@ jobs:
             --enable CONFIG_KPROBE_EVENTS \
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
+            --enable CONFIG_QCOM_QMI_HELPERS \
             --enable CONFIG_QMI_ENCDEC \
+            --enable CONFIG_QRTR \
+            --enable CONFIG_QRTR_SMD \
             --enable CONFIG_RMNET \
-            --enable CONFIG_CPU_IDLE \
-            --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
-            --enable CONFIG_ENERGY_MODEL \
             --disable CONFIG_WERROR \
             --disable CONFIG_DEBUG_FS \
-            --disable CONFIG_DEBUG_KERNEL \
-            --disable CONFIG_PRINTK \
-            --disable CONFIG_PRINTK_INDEX \
-            --disable CONFIG_DYNAMIC_DEBUG \
-            --disable CONFIG_DEBUG_INFO
+            --disable CONFIG_DEBUG_KERNEL
 
           make O=out ARCH=arm64 olddefconfig
 
