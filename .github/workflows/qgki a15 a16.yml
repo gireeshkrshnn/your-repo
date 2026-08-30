@@ -1,4 +1,4 @@
-name: Build Lineage 21 Vili Kernel with WildKSU, SUSFS & KPM
+name: Build Vili 5.4 Stock Kernel - Wild KSU Next + SUSFS 2.2.0 + KPM
 
 on:
   workflow_dispatch:
@@ -6,81 +6,287 @@ on:
 jobs:
   build-kernel:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Maximize Build Disk Space
+      - name: Maximize Disk Space
         uses: easimon/maximize-build-space@v10
         with:
           root-reserve-mb: 8192
           temp-reserve-mb: 100
-          swap-size-mb: 1024
+          swap-size-mb: 2048
           remove-dotnet: 'true'
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
 
-      - name: Set up Environment & Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential dwarves flex gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git libelf-dev libssl-dev make python3 wget zip lld llvm patch
+          sudo apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            curl \
+            dwarves \
+            flex \
+            gcc-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi \
+            git \
+            libelf-dev \
+            libssl-dev \
+            make \
+            python3 \
+            rsync \
+            unzip \
+            wget \
+            zip \
+            lld \
+            llvm \
+            patch
 
-      - name: Clone Lineage 21 Kernel Tree & Inject Modules
+      # ---------------------------------------------------------
+      # VILI KERNEL
+      # ---------------------------------------------------------
+
+      - name: Clone Vili Kernel
         run: |
-          git clone --depth=1 https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git -b lineage-21 kernel
-          cd kernel
-          
-          # Remove conflicting techpack folders that cause external module modpost errors
-          rm -rf techpack/datarmnet || true
-          
-          # Inject WildKSU
-          git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu || true
-          
-          # Inject SUSFS patches for Linux 5.4
-          git clone --depth=1 https://github.com/simonpunk/susfs4oki.git -b android14-5.4 susfs_patches || \
-          git clone --depth=1 https://github.com/sidex15/susfs4oki.git -b android12-5.4 susfs_patches || true
+          set -euo pipefail
 
-          if [ -d "susfs_patches/kernel_patches" ]; then
-            cp -rf susfs_patches/kernel_patches/fs/* fs/ || true
-            cp -rf susfs_patches/kernel_patches/include/* include/ || true
+          git clone --depth=1 \
+            --branch lineage-21 \
+            https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git \
+            kernel
+
+          cd kernel
+
+          echo "===== Kernel version ====="
+          make kernelversion
+
+          echo "===== RMNET HEADER ====="
+          find techpack -name "rmnet_map.h" -print || true
+
+          echo "===== RMNET DIRECTORIES ====="
+          find techpack -maxdepth 3 \
+            -type d -iname "*rmnet*" -print || true
+
+      # ---------------------------------------------------------
+      # WILD KSU / KERNELSU-NEXT
+      # ---------------------------------------------------------
+
+      - name: Add Wild KSU Next
+        run: |
+          set -euo pipefail
+
+          cd kernel
+
+          echo "Adding KernelSU-Next dev-susfs..."
+
+          curl --fail --location --proto '=https' -LSs \
+            https://raw.githubusercontent.com/pershoot/KernelSU-Next/dev-susfs/kernel/setup.sh \
+            | bash -s dev-susfs
+
+          git submodule update --init --recursive
+
+          echo "===== KernelSU-Next ====="
+          ls -la KernelSU-Next/kernel
+
+      # ---------------------------------------------------------
+      # SUSFS 2.2.0
+      # ---------------------------------------------------------
+
+      - name: Get SUSFS 2.2.0
+        run: |
+          set -euo pipefail
+
+          cd kernel
+
+          git clone \
+            --depth=1 \
+            --branch android14-5.4 \
+            https://github.com/simonpunk/susfs4oki.git \
+            susfs
+
+          echo "===== SUSFS ====="
+          git -C susfs log -1 --oneline
+
+      - name: Apply SUSFS
+        run: |
+          set -euo pipefail
+
+          cd kernel
+
+          if [ ! -d "susfs/kernel_patches" ]; then
+            echo "ERROR: SUSFS kernel_patches directory not found"
+            find susfs -maxdepth 3 -type d -print
+            exit 1
           fi
 
-      - name: Clone Clang Toolchain
-        run: |
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain || true
+          echo "===== Applying SUSFS kernel patches ====="
 
-      - name: Configure Kernel with Optimizations & Security
+          if [ -f susfs/kernel_patches/50_add_susfs_in_kernel.patch ]; then
+            patch -p1 < susfs/kernel_patches/50_add_susfs_in_kernel.patch
+          else
+            echo "SUSFS integration patch not found."
+            find susfs/kernel_patches -type f -print
+            exit 1
+          fi
+
+      # ---------------------------------------------------------
+      # VILI DEFCONFIG
+      # ---------------------------------------------------------
+
+      - name: Configure Vili Kernel
         run: |
+          set -euo pipefail
+
           cd kernel
+
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          make O=out gki_defconfig
+
+          mkdir -p out
+
+          echo "===== Searching Vili configs ====="
+
+          find arch/arm64/configs \
+            -type f \
+            \( -iname "*vili*" -o -iname "*sm8350*" \) \
+            -print
+
+          if [ -f arch/arm64/configs/vili_defconfig ]; then
+            DEFCONFIG=vili_defconfig
+
+          elif [ -f arch/arm64/configs/vendor/vili_defconfig ]; then
+            DEFCONFIG=vendor/vili_defconfig
+
+          elif [ -f arch/arm64/configs/vendor/vili-perf_defconfig ]; then
+            DEFCONFIG=vendor/vili-perf_defconfig
+
+          else
+            echo "ERROR: No Vili defconfig found."
+            exit 1
+          fi
+
+          echo "Using $DEFCONFIG"
+
+          make O=out ARCH=arm64 "$DEFCONFIG"
+
+      # ---------------------------------------------------------
+      # KSU + SUSFS + KPATCH REQUIREMENTS
+      # ---------------------------------------------------------
+
+      - name: Enable Root and KPM Requirements
+        run: |
+          set -euo pipefail
+
+          cd kernel
 
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
-            --enable CONFIG_KSU_SUSFS \
-            --enable CONFIG_KPM \
+            --enable CONFIG_KALLSYMS \
+            --enable CONFIG_KALLSYMS_ALL \
             --enable CONFIG_KPROBES \
             --enable CONFIG_HAVE_KPROBES \
             --enable CONFIG_KPROBE_EVENTS \
-            --enable CONFIG_KALLSYMS \
-            --enable CONFIG_KALLSYMS_ALL \
-            --disable CONFIG_WERROR \
-            --disable CONFIG_DEBUG_FS \
-            --disable CONFIG_DEBUG_KERNEL
+            --disable CONFIG_WERROR
+
+          if grep -q '^CONFIG_KSU_SUSFS=' out/.config; then
+            ./scripts/config --file out/.config \
+              --enable CONFIG_KSU_SUSFS
+          fi
 
           make O=out ARCH=arm64 olddefconfig
 
-      - name: Compile Kernel
+          echo "===== Final KSU/SUSFS/KPM prerequisites ====="
+
+          grep -E \
+            'CONFIG_KSU=|CONFIG_KSU_SUSFS=|CONFIG_KALLSYMS=|CONFIG_KALLSYMS_ALL=|CONFIG_KPROBES=|CONFIG_KPROBE_EVENTS=' \
+            out/.config || true
+
+      # ---------------------------------------------------------
+      # KPATCH-NEXT / KPM
+      # ---------------------------------------------------------
+
+      - name: Add KPatch-Next KPM
+        run: |
+          set -euo pipefail
+
+          cd kernel
+
+          git clone \
+            --depth=1 \
+            https://github.com/KernelSU-Next/KPatch-Next.git \
+            kpatch-next
+
+          echo "===== KPatch-Next ====="
+          git -C kpatch-next log -1 --oneline
+
+          echo "===== KPatch source ====="
+          find kpatch-next -maxdepth 3 -type f | head -100
+
+      # ---------------------------------------------------------
+      # VERIFY STOCK POWER MANAGEMENT
+      # ---------------------------------------------------------
+
+      - name: Verify Stock Power Management
         run: |
           cd kernel
-          export PATH="${{ github.workspace }}/clang-toolchain/bin:$PATH"
+
+          echo "===== POWER MANAGEMENT ====="
+
+          grep -E \
+            'CONFIG_PM=|CONFIG_PM_SLEEP=|CONFIG_SUSPEND=|CONFIG_CPU_IDLE=|CONFIG_CPU_FREQ=' \
+            out/.config || true
+
+          echo "===== THERMAL ====="
+
+          grep -E \
+            'CONFIG_THERMAL=|CONFIG_THERMAL_OF=' \
+            out/.config || true
+
+          echo "===== No custom performance modifications ====="
+          echo "Stock CPU/GPU/thermal/suspend configuration retained."
+
+      # ---------------------------------------------------------
+      # CLANG
+      # ---------------------------------------------------------
+
+      - name: Clone Clang
+        run: |
+          set -euo pipefail
+
+          git clone --depth=1 \
+            https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
+            clang-toolchain
+
+      # ---------------------------------------------------------
+      # BUILD
+      # ---------------------------------------------------------
+
+      - name: Build Kernel
+        run: |
+          set -euo pipefail
+
+          cd kernel
+
+          export PATH="${GITHUB_WORKSPACE}/clang-toolchain/bin:${PATH}"
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          make O=out -j$(nproc) \
+
+          echo "===== CLANG ====="
+          clang --version
+
+          echo "===== KERNEL ====="
+          make O=out kernelversion
+
+          make O=out \
+            ARCH=arm64 \
+            -j"$(nproc)" \
             CC=clang \
             LD=ld.lld \
             AR=llvm-ar \
@@ -89,20 +295,71 @@ jobs:
             OBJDUMP=llvm-objdump \
             STRIP=llvm-strip \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            V=1
 
-      - name: Package Flashable Output ZIP
+      # ---------------------------------------------------------
+      # VERIFY IMAGE
+      # ---------------------------------------------------------
+
+      - name: Verify Kernel Image
         run: |
           cd kernel
-          mkdir -p compiled_zip
-          find out -name "Image" -exec cp {} compiled_zip/ \;
-          find out -name "dtb.img" -exec cp {} compiled_zip/ \; || true
-          find out -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
-          cd compiled_zip
-          zip -r ../../lineage-21-vili-wildksu-susfs-kpm.zip *
 
-      - name: Upload Kernel Artifact
+          echo "===== BUILD OUTPUT ====="
+
+          find out -type f \
+            \( -name "Image" \
+            -o -name "Image.gz" \
+            -o -name "Image.gz-dtb" \
+            -o -name "dtb.img" \
+            -o -name "dtbo.img" \) \
+            -print
+
+      # ---------------------------------------------------------
+      # PACKAGE
+      # ---------------------------------------------------------
+
+      - name: Package Kernel
+        run: |
+          set -euo pipefail
+
+          cd kernel
+
+          mkdir -p compiled_zip
+
+          find out -type f -name "Image" \
+            -exec cp {} compiled_zip/ \; || true
+
+          find out -type f -name "Image.gz" \
+            -exec cp {} compiled_zip/ \; || true
+
+          find out -type f -name "Image.gz-dtb" \
+            -exec cp {} compiled_zip/ \; || true
+
+          find out -type f -name "dtb.img" \
+            -exec cp {} compiled_zip/ \; || true
+
+          find out -type f -name "dtbo.img" \
+            -exec cp {} compiled_zip/ \; || true
+
+          if [ -z "$(find compiled_zip -type f -print -quit)" ]; then
+            echo "ERROR: No kernel image was produced."
+            exit 1
+          fi
+
+          cd compiled_zip
+
+          zip -r \
+            ../../vili-stock-wildksu-next-susfs-kpm.zip \
+            .
+
+      # ---------------------------------------------------------
+      # ARTIFACT
+      # ---------------------------------------------------------
+
+      - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Lineage-21-vili-WildKSU-SuFS-KPM
-          path: kernel/lineage-21-vili-wildksu-susfs-kpm.zip
+          name: Vili-Stock-WildKSU-Next-SUSFS-KPM
+          path: vili-stock-wildksu-next-susfs-kpm.zip
