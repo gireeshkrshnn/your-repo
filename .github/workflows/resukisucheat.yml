@@ -1,4 +1,4 @@
-name: Build Vili Ultimate Gaming Kernel (ReSukiSU + SUSFS 2.3.0 + KPM)
+name: Build Vili Ultimate Gaming Kernel (ReSukiSU + SUSFS + KPM)
 
 on:
   workflow_dispatch:
@@ -42,27 +42,36 @@ jobs:
           cd kernel
           make kernelversion
 
-      - name: Add ReSukiSU Drivers
+      - name: Add ReSukiSU Drivers (Symlink Fix)
         run: |
           set -euo pipefail
           cd kernel
-          rm -rf drivers/kernelsu || true
-          git clone --depth=1 https://github.com/ReSukiSU/ReSukiSU.git resukisu-repo
-          mv resukisu-repo/kernel drivers/kernelsu
-          rm -rf resukisu-repo
           
-          # Fix Kconfig integration so defconfig doesn't fail to find drivers/kernelsu/Kconfig
+          # Clean up previous integrations
+          rm -rf drivers/kernelsu KernelSU || true
+          
+          # Clone the full repo (without depth=1) to preserve all git tags and .git metadata
+          git clone https://github.com/ReSukiSU/ReSukiSU.git KernelSU
+          
+          # Symlink the kernel folder into drivers (This satisfies the git submodule check)
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          
+          # Integrate into drivers configuration
           if ! grep -q "kernelsu/Kconfig" drivers/Kconfig; then
             sed -i '/endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig || echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
           fi
+          
+          if ! grep -q "kernelsu" drivers/Makefile; then
+            echo 'obj-y += kernelsu/' >> drivers/Makefile
+          fi
 
-      - name: Download SUSFS 2.3.0+ for Kernel 5.4
+      - name: Download SUSFS for Kernel 5.4
         run: |
           set -euo pipefail
           cd kernel
           git clone --depth=1 --branch kernel-5.4 https://gitlab.com/simonpunk/susfs4ksu.git susfs
 
-      - name: Apply SUSFS 2.3.0+ Patches
+      - name: Apply SUSFS Patches
         run: |
           set -euo pipefail
           cd kernel
