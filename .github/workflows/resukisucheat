@@ -1,4 +1,4 @@
-name: Build Vili Stock Kernel - WildKSU + SUSFS 2.2.0+ + KPM
+name: Build Vili Ultimate Gaming Kernel (ReSukiSU + SUSFS 2.3.0 + KPM)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -24,14 +23,6 @@ jobs:
           remove-codeql: 'true'
           remove-docker-images: 'true'
 
-      - name: Clean Runner Storage
-        run: |
-          set -eux
-          sudo rm -rf /var/lib/apt/lists/*
-          sudo apt-get clean
-          sudo rm -rf /var/cache/apt/archives/*
-          df -h
-
       - name: Install Build Dependencies
         run: |
           set -eux
@@ -43,37 +34,28 @@ jobs:
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
 
-      - name: Clone Vili Kernel Tree
+      - name: Clone Kernel Sources & AnyKernel3
         run: |
           set -euo pipefail
-          git clone \
-            --depth=1 \
-            --branch lineage-21 \
-            https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git \
-            kernel
-
+          git clone --depth=1 https://github.com/unknownbuilder1/kernel_xiaomi_sm8350-los.git kernel
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           cd kernel
           make kernelversion
 
-      - name: Add WildKSU
+      - name: Add ReSukiSU Drivers
         run: |
           set -euo pipefail
           cd kernel
-          git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu || true
-          git submodule update --init --recursive || true
+          rm -rf drivers/kernelsu || true
+          git clone https://github.com/ReSukiSU/ReSukiSU.git drivers/kernelsu
 
-      - name: Download SUSFS 2.2.0+ for Kernel 5.4
+      - name: Download SUSFS 2.3.0+ for Kernel 5.4
         run: |
           set -euo pipefail
           cd kernel
-          git clone \
-            --depth=1 \
-            --branch kernel-5.4 \
-            https://gitlab.com/simonpunk/susfs4ksu.git \
-            susfs
-          git -C susfs log -1 --oneline
+          git clone --depth=1 --branch kernel-5.4 https://gitlab.com/simonpunk/susfs4ksu.git susfs
 
-      - name: Apply SUSFS 2.2.0+ Patches
+      - name: Apply SUSFS 2.3.0+ Patches
         run: |
           set -euo pipefail
           cd kernel
@@ -88,24 +70,18 @@ jobs:
           fi
 
           SUSFS_PATCH=$(find susfs/kernel_patches -maxdepth 1 -type f -name "50_add_susfs_in_kernel*.patch" | head -1)
-          if [ -z "$SUSFS_PATCH" ]; then
-            echo "ERROR: No kernel-5.4 SUSFS patch was found."
-            exit 1
-          fi
-
           patch -p1 --forward --reject-file=- < "$SUSFS_PATCH" || true
 
-      - name: Configure Vili GKI Kernel
+      - name: Configure Kernel Defconfig
         run: |
           set -euo pipefail
           cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
           mkdir -p out
-
           make O=out ARCH=arm64 gki_defconfig
 
-      - name: Enable WildKSU, SUSFS and Battery Optimization Requirements
+      - name: Inject Gaming, Performance OC, & KPM Flags
         run: |
           set -euo pipefail
           cd kernel
@@ -118,7 +94,11 @@ jobs:
             --disable CONFIG_WERROR \
             --disable CONFIG_PM_AUTOSLEEP \
             --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
-            --enable CONFIG_ENERGY_MODEL
+            --enable CONFIG_ENERGY_MODEL \
+            --enable CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE \
+            --disable CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL \
+            --enable CONFIG_HZ_1000 \
+            --set-val HZ 1000
 
           make O=out ARCH=arm64 olddefconfig
 
@@ -126,12 +106,9 @@ jobs:
         run: |
           set -euo pipefail
           export GIT_TERMINAL_PROMPT=0
-          git clone \
-            --depth=1 \
-            https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
-            clang-toolchain
+          git clone --depth=1 https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang-toolchain
 
-      - name: Compile Kernel
+      - name: Compile Gaming Kernel
         run: |
           set -euo pipefail
           cd kernel
@@ -153,23 +130,22 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
-      - name: Verify and Package Kernel
+      - name: Bundle into AnyKernel3 Recovery Flashable Zip
         run: |
           set -euo pipefail
-          cd kernel
-          test -f out/arch/arm64/boot/Image
+          test -f kernel/out/arch/arm64/boot/Image
 
-          mkdir -p compiled_zip
-          cp out/arch/arm64/boot/Image compiled_zip/
+          cp kernel/out/arch/arm64/boot/Image anykernel/
+          find kernel/out -type f -name "dtb.img" -exec cp {} anykernel/ \; || true
+          find kernel/out -type f -name "dtbo.img" -exec cp {} anykernel/ \; || true
 
-          find out -type f -name "dtb.img" -exec cp {} compiled_zip/ \; || true
-          find out -type f -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
+          rm -rf anykernel/.git anykernel/.github
 
-          cd compiled_zip
-          zip -r ../../vili-wildksu-susfs-kpm.zip .
+          cd anykernel
+          zip -r ../Vili-Ultimate-Gaming-Kernel-A13-A17.zip .
 
-      - name: Upload Kernel Artifact
+      - name: Upload Final Flashable Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vili-WildKSU-SUSFS-KPM
-          path: kernel/vili-wildksu-susfs-kpm.zip
+          name: Vili-Ultimate-Gaming-Kernel-ReSukiSU-SUSFS-KPM
+          path: Vili-Ultimate-Gaming-Kernel-A13-A17.zip
