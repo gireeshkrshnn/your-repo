@@ -47,7 +47,9 @@ jobs:
           set -euo pipefail
           cd kernel
           rm -rf drivers/kernelsu || true
-          git clone https://github.com/ReSukiSU/ReSukiSU.git drivers/kernelsu
+          git clone --depth=1 https://github.com/ReSukiSU/ReSukiSU.git resukisu-repo
+          mv resukisu-repo/kernel drivers/kernelsu
+          rm -rf resukisu-repo
           
           # Fix Kconfig integration so defconfig doesn't fail to find drivers/kernelsu/Kconfig
           if ! grep -q "kernelsu/Kconfig" drivers/Kconfig; then
