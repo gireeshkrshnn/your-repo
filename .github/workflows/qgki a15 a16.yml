@@ -104,7 +104,14 @@ jobs:
           export SUBARCH=arm64
           mkdir -p out
 
-          make O=out ARCH=arm64 vendor/vili_defconfig
+          # Find available defconfig automatically
+          DEFCONFIG=$(find arch/arm64/configs -name "*vili*" -o -name "*lahaina*" -o -name "*gki*" | head -1 | xargs basename)
+          if [ -z "$DEFCONFIG" ]; then
+            DEFCONFIG="gki_defconfig"
+          fi
+          echo "Using defconfig: $DEFCONFIG"
+
+          make O=out ARCH=arm64 "$DEFCONFIG"
 
       - name: Enable WildKSU, SUSFS and KPM Requirements
         run: |
@@ -117,8 +124,8 @@ jobs:
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
             --disable CONFIG_WERROR \
-            --enable CONFIG_WQ_POWER_EFFICIENT_DEFAULT \
-            --enable CONFIG_ENERGY_MODEL
+            --disable CONFIG_PM_AUTOSLEEP \
+            --disable CONFIG_ENERGY_MODEL
 
           make O=out ARCH=arm64 olddefconfig
 
