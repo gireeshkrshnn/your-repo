@@ -53,7 +53,6 @@ jobs:
             kernel
 
           cd kernel
-          rm -rf techpack/datarmnet || true
           make kernelversion
 
       - name: Add WildKSU
@@ -152,22 +151,7 @@ jobs:
             OBJDUMP=llvm-objdump \
             STRIP=llvm-strip \
             CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- || {
-              echo "=== BUILD FAILED. RE-RUNNING WITH -J1 TO EXPOSE EXACT ERROR ==="
-              make O=out \
-                ARCH=arm64 \
-                -j1 \
-                CC=clang \
-                LD=ld.lld \
-                AR=llvm-ar \
-                NM=llvm-nm \
-                OBJCOPY=llvm-objcopy \
-                OBJDUMP=llvm-objdump \
-                STRIP=llvm-strip \
-                CROSS_COMPILE=aarch64-linux-gnu- \
-                CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-              exit 1
-            }
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
       - name: Verify and Package Kernel
         run: |
