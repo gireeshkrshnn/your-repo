@@ -1,4 +1,4 @@
-name: Build Vili Stock 5.4 Kernel - WildKSU + SUSFS 2.2.0+ + KPM
+name: Build Vili Stock Kernel - WildKSU + SUSFS 2.2.0+ + KPM
 
 on:
   workflow_dispatch:
@@ -9,16 +9,8 @@ jobs:
 
     steps:
 
-      # ============================================================
-      # CHECKOUT
-      # ============================================================
-
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # ============================================================
-      # DISK SPACE
-      # ============================================================
 
       - name: Maximize Build Disk Space
         uses: easimon/maximize-build-space@v10
@@ -35,119 +27,56 @@ jobs:
       - name: Clean Runner Storage
         run: |
           set -eux
-
           sudo rm -rf /var/lib/apt/lists/*
           sudo apt-get clean
           sudo rm -rf /var/cache/apt/archives/*
-
-          echo "===== DISK ====="
           df -h
-
-      # ============================================================
-      # DEPENDENCIES
-      # ============================================================
 
       - name: Install Build Dependencies
         run: |
           set -eux
-
           sudo apt-get update
-
           sudo apt-get install -y --no-install-recommends \
-            bc \
-            bison \
-            build-essential \
-            ccache \
-            curl \
-            dwarves \
-            flex \
-            gcc-aarch64-linux-gnu \
-            gcc-arm-linux-gnueabi \
-            git \
-            libelf-dev \
-            libssl-dev \
-            make \
-            python3 \
-            rsync \
-            unzip \
-            wget \
-            zip \
-            lld \
-            llvm \
-            patch
-
+            bc bison build-essential ccache curl dwarves flex \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi git \
+            libelf-dev libssl-dev make python3 rsync unzip wget zip lld llvm patch
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
 
-          echo "===== DISK AFTER DEPENDENCIES ====="
-          df -h
-
-      # ============================================================
-      # VILI KERNEL
-      # ============================================================
-
-      - name: Clone Vili Kernel
+      - name: Clone Latest Vili Kernel Tree
         run: |
           set -euo pipefail
-
           git clone \
             --depth=1 \
-            --branch lineage-21 \
+            --branch lineage-23.2 \
             https://github.com/LineageOS/android_kernel_xiaomi_sm8350.git \
             kernel
 
           cd kernel
-
-          # Remove conflicting techpack datarmnet modules to fix modpost symbol failures
           rm -rf techpack/datarmnet || true
-
-          echo "===== KERNEL VERSION ====="
           make kernelversion
-
-      # ============================================================
-      # WILDKSU
-      # ============================================================
 
       - name: Add WildKSU
         run: |
           set -euo pipefail
-
           cd kernel
-
-          echo "===== ADDING WILDKSU ====="
-
           git submodule add https://github.com/WildKernels/Wild_KSU.git drivers/kernelsu || true
           git submodule update --init --recursive || true
-
-          echo "WildKSU added successfully."
-
-      # ============================================================
-      # SUSFS 2.2.0+ (KERNEL 5.4 TREE)
-      # ============================================================
 
       - name: Download SUSFS 2.2.0+ for Kernel 5.4
         run: |
           set -euo pipefail
-
           cd kernel
-
           git clone \
             --depth=1 \
             --branch kernel-5.4 \
             https://gitlab.com/simonpunk/susfs4ksu.git \
             susfs
-
-          echo "===== SUSFS VERSION/COMMIT ====="
           git -C susfs log -1 --oneline
-
-      # ============================================================
-      # APPLY SUSFS 2.2.0+ PATCHES
-      # ============================================================
 
       - name: Apply SUSFS 2.2.0+ Patches
         run: |
           set -euo pipefail
-
           cd kernel
 
           if [ -d susfs/kernel_patches/fs ]; then
@@ -159,12 +88,7 @@ jobs:
             cp -af susfs/kernel_patches/include/linux/. include/linux/
           fi
 
-          SUSFS_PATCH=$(find susfs/kernel_patches \
-            -maxdepth 1 \
-            -type f \
-            -name "50_add_susfs_in_kernel*.patch" \
-            | head -1)
-
+          SUSFS_PATCH=$(find susfs/kernel_patches -maxdepth 1 -type f -name "50_add_susfs_in_kernel*.patch" | head -1)
           if [ -z "$SUSFS_PATCH" ]; then
             echo "ERROR: No kernel-5.4 SUSFS patch was found."
             exit 1
@@ -172,19 +96,12 @@ jobs:
 
           patch -p1 < "$SUSFS_PATCH"
 
-      # ============================================================
-      # FIND VILI DEFCONFIG
-      # ============================================================
-
       - name: Configure Vili Stock Kernel
         run: |
           set -euo pipefail
-
           cd kernel
-
           export ARCH=arm64
           export SUBARCH=arm64
-
           mkdir -p out
 
           DEFCONFIG=""
@@ -201,19 +118,12 @@ jobs:
             exit 1
           fi
 
-          echo "Using: $DEFCONFIG"
           make O=out ARCH=arm64 "$DEFCONFIG"
-
-      # ============================================================
-      # WILDKSU + SUSFS + KPM REQUIREMENTS
-      # ============================================================
 
       - name: Enable WildKSU, SUSFS and KPM Requirements
         run: |
           set -euo pipefail
-
           cd kernel
-
           ./scripts/config --file out/.config \
             --enable CONFIG_KSU \
             --enable CONFIG_KSU_SUSFS \
@@ -224,34 +134,18 @@ jobs:
 
           make O=out ARCH=arm64 olddefconfig
 
-          echo "===== ROOT / SUSFS / KPM CONFIG ====="
-          grep -E \
-            '^CONFIG_KSU=|^CONFIG_KSU_SUSFS=|^CONFIG_KPM=|^CONFIG_KALLSYMS=' \
-            out/.config || true
-
-      # ============================================================
-      # CLANG
-      # ============================================================
-
       - name: Clone Clang Toolchain
         run: |
           set -euo pipefail
-
           git clone \
             --depth=1 \
             https://github.com/LineageOS/android_prebuilts_clang_host_linux-x86_clang-r416183b.git \
             clang-toolchain
 
-      # ============================================================
-      # BUILD
-      # ============================================================
-
       - name: Compile Kernel
         run: |
           set -euo pipefail
-
           cd kernel
-
           export PATH="${GITHUB_WORKSPACE}/clang-toolchain/bin:${PATH}"
           export ARCH=arm64
           export SUBARCH=arm64
@@ -270,14 +164,9 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             V=1
 
-      # ============================================================
-      # VERIFY & PACKAGE
-      # ============================================================
-
       - name: Verify and Package Kernel
         run: |
           set -euo pipefail
-
           cd kernel
           test -f out/arch/arm64/boot/Image
 
@@ -288,14 +177,10 @@ jobs:
           find out -type f -name "dtbo.img" -exec cp {} compiled_zip/ \; || true
 
           cd compiled_zip
-          zip -r ../../vili-wildksu-susfs2.2-kpm.zip .
-
-      # ============================================================
-      # ARTIFACT
-      # ============================================================
+          zip -r ../../vili-latest-wildksu-susfs-kpm.zip .
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Vili-WildKSU-SUSFS2.2-KPM
-          path: kernel/vili-wildksu-susfs2.2-kpm.zip
+          name: Vili-Latest-WildKSU-SUSFS-KPM
+          path: kernel/vili-latest-wildksu-susfs-kpm.zip
