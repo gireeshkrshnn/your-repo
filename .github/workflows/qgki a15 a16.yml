@@ -64,6 +64,8 @@ jobs:
             --enable CONFIG_KPROBE_EVENTS \
             --enable CONFIG_KALLSYMS \
             --enable CONFIG_KALLSYMS_ALL \
+            --enable CONFIG_QMI_ENCDEC \
+            --enable CONFIG_RMNET \
             --enable CONFIG_CPU_IDLE \
             --enable CONFIG_CPU_FREQ_GOV_SCHEDUTIL \
             --enable CONFIG_ENERGY_MODEL \
